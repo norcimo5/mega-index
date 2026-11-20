@@ -1,0 +1,19 @@
+[package]
+name = "mega-index"
+version = "0.1.0"
+edition = "2021"
+description = "Mega Millions / Powerball ticket <-> index encoder/decoder, CSPRNG picker, hot/cold stats"
+
+[lib]
+name = "mega_index"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mega-index"
+path = "src/main.rs"
+
+[dependencies]
+getrandom = "0.2"
+
+[profile.release]
+opt-level = 3

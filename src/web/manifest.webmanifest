@@ -1,0 +1,19 @@
+{
+  "name": "MEGA//INDEX",
+  "short_name": "MEGA//INDEX",
+  "description": "Mega Millions picker and ticket <-> index codec. Crypto-uniform picks, hot/cold stats, works offline.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "lang": "en",
+  "categories": ["entertainment", "utilities"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python3 -m unittest discover -s src/python3/tests
+      - name: Golden check
+        run: tests/check_golden.sh python3 src/python3/mega_index.py
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Unit tests
+        run: cargo test
+        working-directory: src/rust
+      - name: Build release
+        run: cargo build --release
+        working-directory: src/rust
+      - name: Golden check
+        run: tests/check_golden.sh src/rust/target/release/mega-index
+
+  cpp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build
+        run: |
+          cmake -S src/cpp -B src/cpp/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build src/cpp/build
+      - name: Unit tests
+        run: ctest --test-dir src/cpp/build --output-on-failure
+      - name: Golden check
+        run: tests/check_golden.sh src/cpp/build/mega-index
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Core tests
+        run: node src/web/tests/test-core.js
+
+  oracle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Oracle unit tests
+        run: python3 -m unittest tests/test_reference.py

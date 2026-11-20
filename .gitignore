@@ -3,3 +3,11 @@
 .dolt/
 *.db
 .beads-credential-key
+
+# Build artifacts
+__pycache__/
+*.pyc
+src/rust/target/
+src/cpp/build/
+.venv/
+node_modules/

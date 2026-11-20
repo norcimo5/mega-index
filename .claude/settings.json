@@ -22,5 +22,6 @@
         "matcher": ""
       }
     ]
-  }
+  },
+  "agent": "director"
 }

@@ -1,0 +1,3 @@
+game: Powerball
+ticket: 01 02 03 04 05 PB 01
+index: 0
