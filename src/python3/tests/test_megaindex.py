@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -158,6 +159,57 @@ class TestValidation(unittest.TestCase):
                     fh.write(text)
                 rc, out, err = run(["stats", "--data", p])
                 self.assertEqual((rc, out, err), (1, "", "error: %s\n" % msg))
+
+    def test_non_utf8_data_file_is_a_clean_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "bin.csv")
+            with open(p, "wb") as fh:
+                fh.write(b"date,w1,w2,w3,w4,w5,mb\n2025-04-08,1,2,3,4,5,6\n\xff\n")
+            rc, out, err = run(["stats", "--data", p])
+            self.assertEqual((rc, out, err), (1, "", "error: bad data file: line 3\n"))
+
+    def test_deleted_cwd_falls_back_to_script_dir(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "data"))
+            shutil.copy(GOLDEN_DRAWS, os.path.join(d, "data", "draws.csv"))
+            real_getcwd = os.getcwd
+
+            def gone():
+                raise FileNotFoundError(2, "No such file or directory")
+            os.getcwd = gone
+            try:
+                self.assertEqual(find_data(script_dir=d, environ={}),
+                                 os.path.join(d, "data", "draws.csv"))
+            finally:
+                os.getcwd = real_getcwd
+
+
+    def _parse(self, raw):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "x.csv")
+            with open(p, "wb") as fh:
+                fh.write(raw)
+            return load_draws(p, MM)
+
+    def test_data_file_ascii_rules(self):
+        H, ROW = b"date,w1,w2,w3,w4,w5,mb", b"2025-04-08,1,2,3,4,5,6"
+        ok = (H + b"\n" + ROW + b"\n", b"\xef\xbb\xbf" + H + b"\n" + ROW + b"\n",
+              H + b"\r" + ROW + b"\r", H + b"\r\n" + ROW + b"\r\n",
+              H + b"\n \t2025-04-08 , +1,2 ,3,\x0b4,5\x0c,6 \n")
+        for raw in ok:
+            self.assertEqual(self._parse(raw), [("2025-04-08", [1, 2, 3, 4, 5], 6)], raw)
+        bad = (b"2025-04-08,1,2,3,4,5,6\xc2\xa0", b"\xc2\xa02025-04-08,1,2,3,4,5,6",
+               b"2025-04-08,1,2,3,4,5,6\xc2\x85", b"2025-04-08,1,2,3,4,5,6\xe2\x80\xa8",
+               b"2025-04-08,1,2,3,4,5,6\x1f", b"2025-04-08,1,2,3,4,5,\xd9\xa6",
+               b"2025-04-08,1,2,3,4,5,\xef\xbc\x96", b"2025-04-08,1_0,2,3,4,5,6",
+               b"\xef\xbb\xbf2025-04-08,1,2,3,4,5,6", b"\xff")
+        for line in bad:
+            with self.assertRaises(CliError, msg=line) as cm:
+                self._parse(H + b"\n" + line + b"\n")
+            self.assertEqual(str(cm.exception), "bad data file: line 2")
+        with self.assertRaises(CliError) as cm:
+            self._parse(H + b"\xc2\xa0\n" + ROW + b"\n")
+        self.assertIn("header", str(cm.exception))
 
 
 class TestPicks(unittest.TestCase):

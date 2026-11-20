@@ -17,4 +17,15 @@ if __name__ == "__main__":
             _stream.reconfigure(errors="surrogateescape")
         except (AttributeError, ValueError):
             pass
-    sys.exit(main(sys.argv[1:], script_dir=HERE))
+    try:
+        _rc = main(sys.argv[1:], script_dir=HERE)
+        sys.stdout.flush()
+    except OSError:
+        # Full disk / closed pipe on stdout: one clean error, exit 1 (SPEC section 8).
+        try:  # keep the interpreter's exit-time flush from failing again
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except (OSError, ValueError):
+            pass
+        sys.stderr.write("error: cannot write output\n")
+        _rc = 1
+    sys.exit(_rc)

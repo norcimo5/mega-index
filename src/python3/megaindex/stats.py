@@ -8,7 +8,11 @@ from .errors import CliError
 
 HEADER = "date,w1,w2,w3,w4,w5,mb"
 DATA_ENV = "MEGA_INDEX_DATA"
-_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")   # ASCII digits only, whole field
+_NUM_RE = re.compile(r"[+-]?[0-9]+")
+_EOL_RE = re.compile(r"\r\n|\r|\n")                    # the only line separators
+_WS = " \t\r\v\f"                                       # the only whitespace around fields
+_BOM = b"\xef\xbb\xbf"
 
 
 def _walk_up(start):
@@ -52,22 +56,24 @@ def find_data(data_opt=None, cwd=None, script_dir=None, environ=None):
 def load_draws(path, g):
     """Parse and validate a draws file; returns [(date, whites, mb)] sorted by date."""
     try:
-        # Undecodable bytes become U+FFFD and then fail as a bad header/line
-        # instead of escaping as a UnicodeDecodeError traceback.
-        with open(path, encoding="utf-8", errors="replace") as fh:
-            lines = fh.read().splitlines()
+        with open(path, "rb") as fh:
+            raw = fh.read()
     except OSError:
         raise CliError("cannot read data file '%s'" % path, 1)
-    if not lines or lines[0].strip() != HEADER:
+    if raw.startswith(_BOM):
+        raw = raw[3:]
+    # latin-1: one char per byte, so any non-ASCII byte is just "not a digit / not whitespace".
+    lines = _EOL_RE.split(raw.decode("latin-1"))
+    if lines[0].strip(_WS) != HEADER:
         raise CliError("bad data file: header must be '%s'" % HEADER, 1)
     draws = []
     for ln, line in enumerate(lines[1:], start=2):
-        line = line.strip()
+        line = line.strip(_WS)
         if not line:
             continue
-        f = line.split(",")
+        f = [x.strip(_WS) for x in line.split(",")]
         try:
-            if len(f) != 7 or not _DATE_RE.match(f[0]):
+            if len(f) != 7 or not _DATE_RE.fullmatch(f[0]) or not all(_NUM_RE.fullmatch(x) for x in f[1:]):
                 raise ValueError
             whites = sorted(int(x) for x in f[1:6])
             mb = int(f[6])

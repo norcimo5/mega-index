@@ -13,7 +13,11 @@ pub struct Draw {
     pub bonus: u64,
 }
 
-/// Split like Python's str.splitlines (the common separators).
+/// The only whitespace allowed around fields (ASCII; not `str::trim`, which is Unicode-aware).
+const WS: &[char] = &[' ', '\t', '\r', '\x0b', '\x0c'];
+
+/// Split on `\n`, `\r\n` or a bare `\r` only. A trailing separator yields a final empty line,
+/// which the loader skips like any blank line.
 fn split_lines(s: &str) -> Vec<&str> {
     let mut out = Vec::new();
     let mut start = 0;
@@ -21,7 +25,7 @@ fn split_lines(s: &str) -> Vec<&str> {
     let mut i = 0;
     while i < b.len() {
         match b[i] {
-            b'\n' | 0x0b | 0x0c | 0x1c | 0x1d | 0x1e => {
+            b'\n' => {
                 out.push(&s[start..i]);
                 i += 1;
                 start = i;
@@ -37,14 +41,14 @@ fn split_lines(s: &str) -> Vec<&str> {
             _ => i += 1,
         }
     }
-    if start < b.len() {
-        out.push(&s[start..]);
-    }
+    out.push(&s[start..]);
     out
 }
 
+/// `[+-]?[0-9]+` after trimming ASCII whitespace. A minus sign can never give a valid ball, so
+/// it is reported as unparsable (the line is bad either way); overflow is also "bad".
 fn parse_field(s: &str) -> Option<u64> {
-    let t = s.trim();
+    let t = s.trim_matches(WS);
     let t = t.strip_prefix('+').unwrap_or(t);
     if t.is_empty() || !t.bytes().all(|c| c.is_ascii_digit()) {
         return None;
@@ -60,18 +64,19 @@ fn date_ok(s: &str) -> bool {
 
 /// Parse CSV text per the SPEC loader rules.
 pub fn parse_draws(text: &str, g: &Game) -> Result<Vec<Draw>> {
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text); // UTF-8 BOM (Excel)
     let lines = split_lines(text);
-    if lines.is_empty() || lines[0].trim() != HEADER {
+    if lines[0].trim_matches(WS) != HEADER {
         return Err(CliError::runtime(format!("bad data file: header must be '{}'", HEADER)));
     }
     let mut draws = Vec::new();
     for (idx, raw) in lines.iter().enumerate().skip(1) {
-        let line = raw.trim();
+        let line = raw.trim_matches(WS);
         if line.is_empty() {
             continue;
         }
         let bad = || CliError::runtime(format!("bad data file: line {}", idx + 1));
-        let f: Vec<&str> = line.split(',').collect();
+        let f: Vec<&str> = line.split(',').map(|x| x.trim_matches(WS)).collect();
         if f.len() != 7 || !date_ok(f[0]) {
             return Err(bad());
         }

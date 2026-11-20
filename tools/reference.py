@@ -91,11 +91,12 @@ def notes(g):
 
 
 # ---------------------------------------------------------------- parsing
-INT_RE = re.compile(r"^[0-9]{1,18}$")
+# fullmatch, not "$": "$" would also accept "5\n".
+INT_RE = re.compile(r"[0-9]{1,18}")
 
 
 def parse_int(tok):
-    if not INT_RE.match(tok):
+    if not INT_RE.fullmatch(tok):
         raise CliError("not an integer: '%s'" % tok)
     return int(tok)
 
@@ -153,7 +154,13 @@ def find_data(opts):
     env = os.environ.get("MEGA_INDEX_DATA", "")
     if env:
         return env
-    for start in (os.getcwd(), os.path.dirname(os.path.abspath(sys.argv[0]))):
+    starts = []
+    for get in (os.getcwd, lambda: os.path.dirname(os.path.abspath(sys.argv[0]))):
+        try:
+            starts.append(get())
+        except OSError:  # deleted working directory: skip that walk
+            pass
+    for start in starts:
         d = start
         while True:
             p = os.path.join(d, "data", "draws.csv")
@@ -166,22 +173,32 @@ def find_data(opts):
     raise CliError("data file not found (use --data or MEGA_INDEX_DATA)", 1)
 
 
+_WS = " \t\r\v\f"                       # the only whitespace allowed around fields
+_NUM_RE = re.compile(r"[+-]?[0-9]+")
+_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+_EOL_RE = re.compile(r"\r\n|\r|\n")
+
+
 def load_draws(path, g):
     try:
-        with open(path) as fh:
-            lines = fh.read().splitlines()
+        with open(path, "rb") as fh:
+            raw = fh.read()
     except OSError:
         raise CliError("cannot read data file '%s'" % path, 1)
-    if not lines or lines[0].strip() != HEADER:
+    if raw.startswith(b"\xef\xbb\xbf"):
+        raw = raw[3:]
+    # latin-1: every byte is one char, so any non-ASCII byte is simply not a digit or space.
+    lines = _EOL_RE.split(raw.decode("latin-1"))
+    if lines[0].strip(_WS) != HEADER:
         raise CliError("bad data file: header must be '%s'" % HEADER, 1)
     draws = []
     for ln, line in enumerate(lines[1:], start=2):
-        line = line.strip()
+        line = line.strip(_WS)
         if not line:
             continue
-        f = line.split(",")
+        f = [x.strip(_WS) for x in line.split(",")]
         try:
-            if len(f) != 7 or not re.match(r"^\d{4}-\d{2}-\d{2}$", f[0]):
+            if len(f) != 7 or not _DATE_RE.fullmatch(f[0]) or not all(_NUM_RE.fullmatch(x) for x in f[1:]):
                 raise ValueError
             whites = sorted(int(x) for x in f[1:6])
             mb = int(f[6])
@@ -495,5 +512,25 @@ def main(argv):
     return 0
 
 
+def run_cli(argv):
+    """Run main(); a failing stdout (full disk, closed pipe) is one clean error, exit 1."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="surrogateescape")  # echo non-UTF-8 argv bytes back
+        except (AttributeError, ValueError):
+            pass
+    try:
+        rc = main(argv)
+        sys.stdout.flush()
+        return rc
+    except OSError:
+        try:  # keep the interpreter's exit-time flush from failing again
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except (OSError, ValueError):
+            pass
+        sys.stderr.write("error: cannot write output\n")
+        return 1
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(run_cli(sys.argv[1:]))

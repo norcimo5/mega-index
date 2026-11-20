@@ -52,12 +52,41 @@ CASES = [
     ("err_unknown_cmd", "frobnicate"),
     ("err_unknown_opt", "encode 1 2 3 4 5 --bonus 1 --wat"),
     ("err_data_missing", "stats --data tests/golden/no-such-file.csv"),
+    ("stats_bom", "stats --data tests/golden/data_bom.csv"),
+    ("guess_cr", "guess --data tests/golden/data_cr.csv"),
+    ("err_data_nbsp", "stats --data tests/golden/bad_nbsp.csv"),
+    ("err_data_unicode_digit", "stats --data tests/golden/bad_digit.csv"),
+    ("err_data_underscore", "stats --data tests/golden/bad_underscore.csv"),
+    ("err_data_nel", "stats --data tests/golden/bad_nel.csv"),
+    ("err_data_header_nbsp", "stats --data tests/golden/bad_header.csv"),
 ]
+
+
+def write_data_fixtures():
+    """Derived data-file variants (ASCII-only parsing rules, SPEC section 4)."""
+    with open(os.path.join(G, "draws.csv"), "rb") as fh:
+        base = fh.read()
+    lines = base.split(b"\n")
+    assert lines[-1] == b""
+    lines.pop()
+    out = {
+        "data_bom.csv": b"\xef\xbb\xbf" + base,
+        "data_cr.csv": b"\r".join(lines) + b"\r",
+        "bad_nbsp.csv": b"\n".join(lines[:5] + [lines[5].replace(b",", b",\xc2\xa0", 1)] + lines[6:]) + b"\n",
+        "bad_digit.csv": b"\n".join(lines[:5] + [lines[5][:-1] + b"\xd9\xa6"] + lines[6:]) + b"\n",
+        "bad_underscore.csv": b"\n".join(lines[:5] + [lines[5].replace(b",", b",1_", 1)] + lines[6:]) + b"\n",
+        "bad_nel.csv": b"\n".join(lines[:5] + [lines[5] + b"\xc2\x85"] + lines[6:]) + b"\n",
+        "bad_header.csv": b"\n".join([lines[0] + b"\xc2\xa0"] + lines[1:]) + b"\n",
+    }
+    for name, data in out.items():
+        with open(os.path.join(G, name), "wb") as fh:
+            fh.write(data)
 
 
 def main():
     if "--refresh-fixture" in sys.argv:
         shutil.copy(os.path.join(ROOT, "data", "draws.csv"), os.path.join(G, "draws.csv"))
+    write_data_fixtures()
     for f in os.listdir(G):
         if f.endswith((".txt", ".err")) or f == "cases.tsv":
             os.remove(os.path.join(G, f))

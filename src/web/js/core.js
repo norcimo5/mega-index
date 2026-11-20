@@ -178,20 +178,21 @@
     return out.map(function (r) { return { d: r.d, w: r.w, m: r.m }; });
   }
 
-  // Parse draws.csv text (SPEC section 4 loader rules).
+  // Parse draws.csv text (SPEC section 4 loader rules: ASCII-only, optional leading BOM).
+  function asciiTrim(x) { return x.replace(/^[ \t\r\v\f]+|[ \t\r\v\f]+$/g, ""); }
   function parseDrawsCsv(g, text) {
     g = getGame(g);
-    var lines = text.split(/\r?\n/);
-    if (lines.length && lines[lines.length - 1] === "") lines.pop();
-    if (!lines.length || lines[0].trim() !== "date,w1,w2,w3,w4,w5,mb")
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    var lines = text.split(/\r\n|\r|\n/);
+    if (asciiTrim(lines[0]) !== "date,w1,w2,w3,w4,w5,mb")
       throw new Error("bad data file: header must be 'date,w1,w2,w3,w4,w5,mb'");
     var raw = [];
     for (var ln = 1; ln < lines.length; ln++) {
-      var line = lines[ln].trim();
+      var line = asciiTrim(lines[ln]);
       if (!line) continue;
-      var f = line.split(",");
-      var bad = f.length !== 7 || !/^\d{4}-\d{2}-\d{2}$/.test(f[0]);
-      var nums = f.slice(1).map(function (x) { return /^\s*-?\d+\s*$/.test(x) ? parseInt(x, 10) : NaN; });
+      var f = line.split(",").map(asciiTrim);
+      var bad = f.length !== 7 || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(f[0]);
+      var nums = f.slice(1).map(function (x) { return /^[+-]?[0-9]+$/.test(x) ? parseInt(x, 10) : NaN; });
       if (!bad && nums.some(isNaN)) bad = true;
       var w = bad ? null : nums.slice(0, 5).sort(numAsc);
       if (bad || validateTicket(g, w, nums[5])) throw new Error("bad data file: line " + (ln + 1));

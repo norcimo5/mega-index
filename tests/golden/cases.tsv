@@ -33,3 +33,10 @@ err_pb_stats	2	stats --game powerball
 err_unknown_cmd	2	frobnicate
 err_unknown_opt	2	encode 1 2 3 4 5 --bonus 1 --wat
 err_data_missing	1	stats --data tests/golden/no-such-file.csv
+stats_bom	0	stats --data tests/golden/data_bom.csv
+guess_cr	0	guess --data tests/golden/data_cr.csv
+err_data_nbsp	1	stats --data tests/golden/bad_nbsp.csv
+err_data_unicode_digit	1	stats --data tests/golden/bad_digit.csv
+err_data_underscore	1	stats --data tests/golden/bad_underscore.csv
+err_data_nel	1	stats --data tests/golden/bad_nel.csv
+err_data_header_nbsp	1	stats --data tests/golden/bad_header.csv

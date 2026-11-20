@@ -16,10 +16,14 @@ namespace {
 
 const char* const HEADER = "date,w1,w2,w3,w4,w5,mb";
 
+// The only whitespace allowed around fields: ASCII space, \t, \r, \v, \f (not isspace(), which
+// is locale-dependent and also accepts \n).
+bool is_ws(char c) { return c == ' ' || c == '\t' || c == '\r' || c == '\v' || c == '\f'; }
+
 std::string strip(const std::string& s) {
     std::size_t a = 0, b = s.size();
-    while (a < b && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
-    while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
+    while (a < b && is_ws(s[a])) ++a;
+    while (b > a && is_ws(s[b - 1])) --b;
     return s.substr(a, b - a);
 }
 
@@ -35,7 +39,7 @@ std::string dirname_of(const std::string& p) {
     return p.substr(0, i);
 }
 
-// Like Python int(): optional surrounding whitespace, optional sign, digits.
+// [+-]? then ASCII digits, after trimming ASCII whitespace.
 bool parse_int_field(const std::string& raw, long long& out) {
     std::string s = strip(raw);
     std::size_t i = 0;
@@ -57,7 +61,7 @@ bool is_date(const std::string& s) {
     for (std::size_t i = 0; i < 10; ++i) {
         if (i == 4 || i == 7) {
             if (s[i] != '-') return false;
-        } else if (!std::isdigit(static_cast<unsigned char>(s[i]))) {
+        } else if (s[i] < '0' || s[i] > '9') {
             return false;
         }
     }
@@ -109,14 +113,12 @@ std::string find_data(const std::string* cli_path, const DataEnv& env) {
 }
 
 std::vector<Draw> parse_draws(const std::string& text, const Game& g) {
-    // Split like Python's universal newlines + str.splitlines (as the oracle does):
-    // \n, \r\n, bare \r, and the ASCII separators \v \f \x1c \x1d \x1e each end a line.
+    // Strip a leading UTF-8 BOM (Excel). Lines end at \n, \r\n or a bare \r, and nothing else.
+    std::size_t start = text.compare(0, 3, "\xef\xbb\xbf") == 0 ? 3 : 0;
     std::vector<std::string> lines;
-    std::size_t start = 0;
-    for (std::size_t i = 0; i < text.size();) {
+    for (std::size_t i = start; i < text.size();) {
         const char c = text[i];
-        if (c == '\n' || c == '\r' || c == '\v' || c == '\f' || c == '\x1c' || c == '\x1d' ||
-            c == '\x1e') {
+        if (c == '\n' || c == '\r') {
             lines.push_back(text.substr(start, i - start));
             ++i;
             if (c == '\r' && i < text.size() && text[i] == '\n') ++i;
@@ -125,8 +127,8 @@ std::vector<Draw> parse_draws(const std::string& text, const Game& g) {
             ++i;
         }
     }
-    if (start < text.size()) lines.push_back(text.substr(start));
-    if (lines.empty() || strip(lines[0]) != HEADER) {
+    lines.push_back(text.substr(start));
+    if (strip(lines[0]) != HEADER) {
         throw CliError(std::string("bad data file: header must be '") + HEADER + "'", 1);
     }
     std::vector<Draw> draws;
@@ -145,6 +147,7 @@ std::vector<Draw> parse_draws(const std::string& text, const Game& g) {
             f.push_back(line.substr(s, c - s));
             s = c + 1;
         }
+        for (auto& x : f) x = strip(x);
         if (f.size() != 7 || !is_date(f[0])) throw bad();
         long long v[6];
         for (int i = 0; i < 6; ++i) {

@@ -106,9 +106,16 @@ from `file://`) that sets `window.MM_DRAWS = [{"d":"2025-04-08","w":[10,16,50,60
 and `window.MM_DRAWS_UPDATED = "<ISO UTC timestamp>";`.
 
 **Loader rules (CLIs):** line 1, after trimming whitespace, must equal the header exactly. Blank
-lines are skipped. Each other line must have exactly 7 comma-separated fields, with field 1 matching
-`^\d{4}-\d{2}-\d{2}$`. Whites must be valid (5 distinct, 1..70) and the MB must be in 1..24. Sort the
+lines are skipped. Each other line must have exactly 7 comma-separated fields, with field 1 an ISO date. Whites must be valid (5 distinct, 1..70) and the MB must be in 1..24. Sort the
 whites, then **stable**-sort the draws by date (use `std::stable_sort` in C++). The shipped file has unique, already-sorted dates. On failure, use the exit-1 data errors in section 8.
+
+**Parsing rules (all versions, identical).** Data files are parsed as ASCII bytes:
+- A leading UTF-8 BOM (EF BB BF) at the very start of the file is accepted and stripped (Excel-saved files). A BOM anywhere else is just an invalid byte.
+- Line separators are `\n`, `\r\n` and a bare `\r`, and nothing else. NEL (U+0085), U+2028/2029, `\v`, `\f` and `\x1c`-`\x1f` are NOT separators. Line numbers in errors count every separator.
+- The only whitespace allowed around a line or a field is ASCII space, `\t`, `\r`, `\v`, `\f`. NBSP and every other non-ASCII byte are not whitespace.
+- Number fields match `[+-]?[0-9]+` exactly (after trimming). No Unicode digits, no underscores, no other forms. A value that is out of range, or too large for the implementation, is just an invalid line.
+- The date field (trimmed) matches `[0-9]{4}-[0-9]{2}-[0-9]{2}`, ASCII digits only.
+- Bytes that are not valid UTF-8 are simply invalid (never a crash). Any violation gives `bad data file: line <n>` (or the header error on line 1).
 
 **Data path resolution** (stats, guess, and weighted pick). The first match wins:
 1. `--data PATH`
@@ -315,6 +322,7 @@ One exception: if writing the `--export` file fails, the pick lines and NOTE lin
 | 1 | `cannot read data file '<path>'` (path exactly as resolved/given) |
 | 1 | `bad data file: header must be 'date,w1,w2,w3,w4,w5,mb'` / `bad data file: line <n>` / `bad data file: no draws` |
 | 1 | `cannot write '<path>'` (export) |
+| 1 | `cannot write output` (stdout is full or closed, e.g. `> /dev/full`; supersedes any other result, output already written is lost) |
 
 Success: exit 0.
 

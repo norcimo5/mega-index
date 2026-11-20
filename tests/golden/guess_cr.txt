@@ -1,0 +1,6 @@
+MEGA MILLIONS GUESS  draws=169  2025-04-08..2026-11-17
+A: 10 18 40 42 49 MB 12  index 43748603  (HOT)
+B: 20 23 28 29 67 MB 15  index 215053886  (COLD)
+C: 10 40 49 52 69 MB 13  index 256609788  (BALANCED)
+NOTE: Fair picks do not improve your odds. Every ticket is 1 in 290,472,336.
+NOTE: Hot/cold is for fun and cannot predict draws; uniform is the default mode.

@@ -266,6 +266,36 @@ static void test_data_loader() {
     // stable sort for equal dates
     d = parse_draws("date,w1,w2,w3,w4,w5,mb\n2025-01-01,1,2,3,4,5,1\n2025-01-01,6,7,8,9,10,2\n", g);
     CHECK(d[0].mb == 1 && d[1].mb == 2);
+    // bare CR (classic Mac) and mixed line endings split like the oracle's universal newlines
+    d = parse_draws("date,w1,w2,w3,w4,w5,mb\r2025-01-01,1,2,3,4,5,1\r2025-01-02,6,7,8,9,10,2\r", g);
+    CHECK(d.size() == 2 && d[1].mb == 2);
+    d = parse_draws("date,w1,w2,w3,w4,w5,mb\r\n2025-01-01,1,2,3,4,5,1\n2025-01-02,6,7,8,9,10,2\r"
+                    "2025-01-03,1,2,3,4,5,3\n2025-01-04,1,2,3,4,5,4", g);
+    CHECK(d.size() == 4 && d[3].mb == 4);
+    bad("date,w1,w2,w3,w4,w5,mb\r\r2025-01-01,1,2\r,3,4,5,1\r", "bad data file: line 3");
+    // ASCII-only parsing: BOM accepted at the start only; NBSP, Unicode digits, underscores,
+    // NEL, U+2028 and \x1c-\x1f are never whitespace, digits or separators; \v \f are whitespace.
+    const std::string H = "date,w1,w2,w3,w4,w5,mb\n";
+    d = parse_draws("\xef\xbb\xbf" + H + "2025-01-01,1,2,3,4,5,6\n", g);
+    CHECK(d.size() == 1);
+    bad(H + "\xef\xbb\xbf" "2025-01-01,1,2,3,4,5,6\n", "bad data file: line 2");
+    d = parse_draws(H + " \t2025-01-01 , +1,2 ,3,\v4,5\f,6 \n", g);
+    CHECK(d.size() == 1 && d[0].mb == 6);
+    for (const char* b : {"\xc2\xa0" "2025-01-01,1,2,3,4,5,6", "2025-01-01,1,2,3,4,5,\xc2\xa0" "6",
+                          "2025-01-01,1,2,3,4,5,6\xc2\x85", "2025-01-01,1,2,3,4,5,6\xe2\x80\xa8",
+                          "2025-01-01,1,2,3,4,5,6\x1f", "\x1c" "2025-01-01,1,2,3,4,5,6",
+                          "2025-01-01,1,2,3,4,5,\xd9\xa6", "2025-01-01,1,2,3,4,5,\xef\xbc\x96",
+                          "2025-01-01,1_0,2,3,4,5,6", "2025-01-01,1,2,3,4,5,6_",
+                          "\xd9\xa6" "025-01-01,1,2,3,4,5,6", "2025-01-01,1,2,3,4,5,+-6"}) {
+        bad(H + b + "\n", "bad data file: line 2");
+    }
+    bad("date,w1,w2,w3,w4,w5,mb\xc2\xa0\n2025-01-01,1,2,3,4,5,6\n",
+        "bad data file: header must be 'date,w1,w2,w3,w4,w5,mb'");
+    // leading zeros of any length are still the same number; huge values are just out of range
+    d = parse_draws("date,w1,w2,w3,w4,w5,mb\n2025-01-01,0000000000000000000000001,2,3,4,5,+6\n", g);
+    CHECK(d.size() == 1 && d[0].whites[0] == 1 && d[0].mb == 6);
+    bad("date,w1,w2,w3,w4,w5,mb\n2025-01-01,1,2,3,4,99999999999999999999999,6\n",
+        "bad data file: line 2");
 }
 
 static void test_stats_math() {

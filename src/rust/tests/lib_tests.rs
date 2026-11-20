@@ -151,6 +151,37 @@ fn bad_data_files() {
 }
 
 #[test]
+fn data_file_parsing_is_ascii_only() {
+    let h = "date,w1,w2,w3,w4,w5,mb";
+    let row = "2025-04-08,1,2,3,4,5,6";
+    let msg = |t: &str| parse_draws(t, &MM).unwrap_err().msg;
+    // a leading UTF-8 BOM is accepted (and only at the start of the file)
+    assert_eq!(parse_draws(&format!("\u{feff}{}\n{}\n", h, row), &MM).unwrap().len(), 1);
+    assert_eq!(msg(&format!("{}\n\u{feff}{}\n", h, row)), "bad data file: line 2");
+    // bare CR, CRLF and mixed separators; ASCII whitespace around fields
+    assert_eq!(parse_draws(&format!("{}\r{}\r", h, row), &MM).unwrap().len(), 1);
+    assert_eq!(parse_draws(&format!("{}\r\n{}\r\n", h, row), &MM).unwrap().len(), 1);
+    assert_eq!(parse_draws(&format!("{}\r{}\r\r{}\n2025-04-09,1,2,3,4,5,7", h, row, row), &MM).unwrap().len(), 3);
+    assert_eq!(msg(&format!("{}\r\r2025-04-08,1,2\r,3,4,5,6\r", h)), "bad data file: line 3");
+    assert_eq!(parse_draws(&format!("{}\n \t2025-04-08 , +1,2 ,3,\x0b4,5\x0c,6 \n", h), &MM).unwrap().len(), 1);
+    // NBSP, other Unicode whitespace, NEL, U+2028 and \x1c-\x1f are not whitespace or separators
+    for bad in ["\u{a0}2025-04-08,1,2,3,4,5,6", "2025-04-08,1,2,3,4,5,\u{a0}6", "2025-04-08,1,2,3,4,5,6\u{85}",
+                "2025-04-08,1,2,3,4,5,6\u{2028}", "2025-04-08,1,2,3,4,5,6\x1f", "\x1c2025-04-08,1,2,3,4,5,6",
+                "2025-04-08,1,2,3,4,5,6\u{3000}"] {
+        assert_eq!(msg(&format!("{}\n{}\n", h, bad)), "bad data file: line 2", "{:?}", bad);
+    }
+    // header with NBSP is a header error
+    assert_eq!(msg(&format!("{}\u{a0}\n{}\n", h, row)), "bad data file: header must be 'date,w1,w2,w3,w4,w5,mb'");
+    // Unicode digits (Arabic-Indic, fullwidth) and underscores are not numbers or dates
+    for bad in ["2025-04-08,1,2,3,4,5,\u{666}", "2025-04-08,1,2,3,4,5,\u{ff16}", "2025-04-08,1_0,2,3,4,5,6",
+                "2025-04-08,1,2,3,4,5,6_", "\u{666}025-04-08,1,2,3,4,5,6", "2025-04-08,1,2,3,4,5,+-6"] {
+        assert_eq!(msg(&format!("{}\n{}\n", h, bad)), "bad data file: line 2", "{:?}", bad);
+    }
+    // invalid UTF-8 bytes are just a bad line (via load_draws's lossy decode)
+    assert_eq!(msg(&format!("{}\n{}\n{}\n", h, row, String::from_utf8_lossy(b"\xff"))), "bad data file: line 3");
+}
+
+#[test]
 fn randbelow_range_and_distribution() {
     for n in [1u64, 2, 3, 24, 70, 290_472_336, 4_000_000_000, 1 << 32] {
         for _ in 0..1000 {

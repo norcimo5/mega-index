@@ -8,8 +8,12 @@ fn main() {
     let res = mega_index::cli::run(&args);
     let stdout = std::io::stdout();
     let mut lock = stdout.lock();
-    let _ = lock.write_all(&mega_index::osarg::encode(&res.stdout));
-    let _ = lock.flush();
+    let wrote = lock.write_all(&mega_index::osarg::encode(&res.stdout)).and_then(|_| lock.flush());
+    if wrote.is_err() {
+        // Full disk / closed pipe: one clean error, exit 1 (SPEC section 8).
+        let _ = std::io::stderr().write_all(b"error: cannot write output\n");
+        std::process::exit(1);
+    }
     if !res.stderr.is_empty() {
         let _ = std::io::stderr().write_all(&mega_index::osarg::encode(&res.stderr));
     }

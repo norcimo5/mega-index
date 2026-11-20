@@ -10,7 +10,8 @@ from .game import DEFAULT_GAME, GAMES
 from .picks import MODES, PLAY_LABELS, guess_tickets, make_slip
 from .stats import Stats, find_data, load_draws, need_history
 
-_INT_RE = re.compile(r"^[0-9]{1,18}$")
+# fullmatch, not "$": "$" would also accept a token with a trailing newline ("5\n").
+_INT_RE = re.compile(r"[0-9]{1,18}")
 
 USAGE = """mega-index: lottery ticket <-> index encoder/decoder and picker
 
@@ -44,7 +45,7 @@ class Context:
 
 
 def parse_int(tok):
-    if not _INT_RE.match(tok):
+    if not _INT_RE.fullmatch(tok):
         raise CliError("not an integer: '%s'" % tok)
     return int(tok)
 
