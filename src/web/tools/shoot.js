@@ -92,6 +92,7 @@ async function main() {
     if (s.reducedMotion) await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
     else await send("Emulation.setEmulatedMedia", { features: [] });
     if (s.offline !== undefined) await send("Network.enable"), await send("Network.emulateNetworkConditions", { offline: !!s.offline, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+    if (s.shell) child.execSync(s.shell, { stdio: "inherit" });
     var url = (s.url || base) + (s.hash || "");
     await send("Page.navigate", { url: "about:blank" });
     await sleep(100);
@@ -102,22 +103,24 @@ async function main() {
     if (s.scrollSel) await evaluate("window.scrollTo(0, document.querySelector(" + JSON.stringify(s.scrollSel) + ").getBoundingClientRect().top + scrollY - 70)");
     else if (s.scrollTo !== undefined) await evaluate("window.scrollTo(0," + s.scrollTo + ")");
     await sleep(250);
-    var m = await evaluate("JSON.stringify({iw: innerWidth, sw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, h: document.documentElement.scrollHeight, ctl: !!(navigator.serviceWorker && navigator.serviceWorker.controller), title: document.title, wide: Array.from(document.querySelectorAll('body *')).filter(function(e){var r=e.getBoundingClientRect();return r.width>0 && (r.right>innerWidth+0.5) && !e.closest('.ticker');}).slice(0,5).map(function(e){return e.tagName+'.'+e.className+' '+Math.round(e.getBoundingClientRect().right)})})");
+    var m = await evaluate("JSON.stringify({iw: innerWidth, sw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, h: document.documentElement.scrollHeight, ctl: !!(navigator.serviceWorker && navigator.serviceWorker.controller), title: document.title, wide: Array.from(document.querySelectorAll('body *')).filter(function(e){var r=e.getBoundingClientRect();return r.width>0 && (r.right>" + dev.width + ".5) && !e.closest('.ticker');}).slice(0,5).map(function(e){return e.tagName+'.'+e.className+' '+Math.round(e.getBoundingClientRect().right)})})");
     m = JSON.parse(m);
     var shotParams = { format: "png" };
     if (s.full) {
       shotParams.captureBeyondViewport = true;
       shotParams.clip = { x: 0, y: 0, width: dev.width, height: m.h, scale: 1 };
-      await evaluate("window.scrollTo(0,0)");
+      await evaluate("window.scrollTo(0,0);var x=document.createElement('style');x.textContent='.tabbar,.toast{display:none!important}.top{position:relative!important}';document.head.appendChild(x)");
     }
     if (s.extraEval) m.extra = await evaluate(s.extraEval);
+    if (s.cdp) { try { m.cdp = await send(s.cdp); } catch (e) { m.cdp = String(e.message); } }
+    if (s.full) { await sleep(200); m.h = await evaluate("document.documentElement.scrollHeight"); shotParams.clip.height = m.h; }
     if (!s.noShot) {
       var shot = await send("Page.captureScreenshot", shotParams);
       fs.writeFileSync(path.join(outDir, s.name + ".png"), Buffer.from(shot.data, "base64"));
     }
-    var overflow = m.sw > m.iw || m.bw > m.iw;
+    var overflow = m.iw > dev.width || m.sw > dev.width || m.bw > dev.width;
     report.push(s.name + ": innerWidth=" + m.iw + " scrollWidth=" + m.sw + " height=" + m.h + " swControlled=" + m.ctl +
-      (overflow ? " OVERFLOW" : "") + (m.wide.length ? " wide=" + JSON.stringify(m.wide) : "") + (m.extra !== undefined ? " extra=" + JSON.stringify(m.extra) : ""));
+      (overflow ? " OVERFLOW" : "") + (m.wide.length ? " wide=" + JSON.stringify(m.wide) : "") + (m.extra !== undefined ? " extra=" + JSON.stringify(m.extra) : "") + (m.cdp !== undefined ? " cdp=" + JSON.stringify(m.cdp) : ""));
     if (overflow) problems.push("overflow in " + s.name);
   }
   ws.close();

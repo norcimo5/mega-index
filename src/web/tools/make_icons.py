@@ -63,7 +63,7 @@ def emblem(S, scale, full_bleed):
             d.line([(x0, y0), (x0, y0 - sy * t)], fill=INK + (255,), width=max(1, w // 2))
     # ball glow
     br = R * 0.56
-    glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    glow = Image.new("RGBA", (S, S), GOLD + (0,))
     ImageDraw.Draw(glow).ellipse([cx - br * 1.12, cy - br * 1.12, cx + br * 1.12, cy + br * 1.12], fill=GOLD + (150,))
     glow = glow.filter(ImageFilter.GaussianBlur(S * 0.04))
     img.alpha_composite(glow)

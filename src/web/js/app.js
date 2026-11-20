@@ -539,7 +539,7 @@
     var upd = UPDATED ? UPDATED.replace("T", " ").replace(/:\d\dZ$/, " UTC").replace("Z", " UTC") : "unknown";
     $("#kpis").innerHTML =
       '<div class="kpi"><div class="k">DRAWS</div><div class="v">' + st.D + "</div></div>" +
-      '<div class="kpi"><div class="k">EXPECTED</div><div class="v">' + st.expWText + ' <small>W</small> ' + st.expBText + " <small>MB</small></div></div>" +
+      '<div class="kpi"><div class="k">EXPECTED FREQ</div><div class="v sm">WHITE ' + st.expWText + "<br>MB&nbsp;&nbsp;&nbsp;&nbsp;" + st.expBText + "</div></div>" +
       '<div class="kpi wide"><div class="k">RANGE</div><div class="v sm">' + st.first + " → " + st.last + "</div></div>" +
       '<div class="kpi wide"><div class="k">LAST DRAW · ' + last.d + '</div><div class="v" id="lastDraw"></div></div>' +
       '<div class="kpi wide"><div class="k">DATA UPDATED</div><div class="v sm">' + upd + "</div></div>";
@@ -672,7 +672,10 @@
       vibrate(10);
       if (deferredPrompt) {
         var p = deferredPrompt; deferredPrompt = null;
-        try { p.prompt(); } catch (err) { openSheet(); return; }
+        try {
+          var pr = p.prompt();
+          if (pr && pr.catch) pr.catch(function () { openSheet(); });
+        } catch (err) { openSheet(); return; }
         if (p.userChoice) p.userChoice.then(function (c) { if (c && c.outcome === "accepted") installBtn.hidden = true; });
       } else openSheet();
     });
@@ -697,7 +700,7 @@
     });
     $("#updateReload").addEventListener("click", function () { location.reload(); });
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js").then(function (reg) {
+      navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function (reg) {
         document.addEventListener("visibilitychange", function () {
           if (document.visibilityState === "visible") reg.update().catch(function () {});
         });

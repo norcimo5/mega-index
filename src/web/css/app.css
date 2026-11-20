@@ -166,9 +166,9 @@ h1.glitch::after { color: var(--blue); clip-path: inset(100% 0 0 0); animation: 
 /* ---------------------------------------------------------------- layout */
 main {
   max-width: 760px; margin: 0 auto;
-  padding: 14px 12px calc(var(--tabbar-h) + var(--safe-b) + 24px);
+  padding: 14px 10px calc(var(--tabbar-h) + var(--safe-b) + 24px);
 }
-.view { display: grid; gap: 14px; animation: viewIn .28s ease both; }
+.view { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: viewIn .28s ease both; }
 @keyframes viewIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* HUD panel: chamfered border via two clipped layers */
@@ -203,7 +203,7 @@ main {
 .view > .hud.mini { padding-bottom: 12px; }
 
 /* segmented control */
-.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0; border: 1.5px solid var(--ink); background: #fff; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; border: 1.5px solid var(--ink); background: #fff; }
 .seg button {
   min-height: 44px; border: 0; background: transparent; cursor: pointer; font-weight: 800; font-size: 12px;
   letter-spacing: .08em; color: var(--ink-2); border-left: 1px solid var(--line); padding: 0 4px; touch-action: manipulation;
@@ -216,7 +216,8 @@ main {
 .seg-mode button[data-v="hot"][aria-checked="true"] { background: var(--magenta-ink); box-shadow: inset 0 -3px 0 var(--magenta); }
 .seg-mode button[data-v="cold"][aria-checked="true"] { background: var(--cyan-ink); box-shadow: inset 0 -3px 0 var(--cyan); }
 .seg-mode button[data-v="mixed"][aria-checked="true"] { background: linear-gradient(90deg, var(--magenta-ink), var(--cyan-ink)); }
-.seg-sub button { font-size: 11px; letter-spacing: .06em; }
+.seg-sub button { font-size: 11px; letter-spacing: .06em; line-height: 1.25; padding: 4px 6px; }
+.seg-mode button { font-size: 11.5px; letter-spacing: .04em; }
 .seg-tiny { flex: none; border-width: 1px; }
 .seg-tiny button { min-height: 32px; min-width: 52px; font-size: 10.5px; }
 /* extend tiny segment hit area to 44px */
@@ -311,7 +312,7 @@ main {
 .enc-msg.err { color: var(--red-ink); font-weight: 700; }
 .enc-msg.ok { color: var(--ok-ink); font-weight: 700; }
 
-.num-grid { display: grid; gap: 4px; }
+.num-grid { display: grid; gap: 3px; margin: 0 -6px; }
 .grid-w { grid-template-columns: repeat(7, 1fr); }
 .grid-mb { grid-template-columns: repeat(6, 1fr); }
 .num {
@@ -385,7 +386,7 @@ main {
 .detail .pos { color: #ff8ad3; }
 .detail .neg { color: #6fe6ff; }
 .heat-label { margin-top: 14px; }
-.heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.heat { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin: 0 -6px; }
 .cell {
   min-height: 44px; border: 0; cursor: pointer; display: grid; place-items: center; align-content: center; gap: 0;
   font-weight: 900; font-size: 14px; line-height: 1.05; color: var(--ink); padding: 2px 0; touch-action: manipulation;
@@ -513,17 +514,17 @@ main {
 }
 @media (min-width: 1100px) {
   main, .top-row { max-width: 1040px; }
-  #view-pick { grid-template-columns: 380px 1fr; align-items: start; }
+  #view-pick { grid-template-columns: 380px minmax(0, 1fr); align-items: start; }
   #view-pick > .hud:first-child { position: sticky; top: 110px; }
   #view-pick > .note { grid-column: 1 / -1; }
-  #view-stats { grid-template-columns: 1fr 1fr; align-items: start; }
+  #view-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   #view-stats > .hud:nth-child(1), #view-stats > .hud:nth-child(2) { grid-column: 1 / -1; }
   #view-stats > .note { grid-column: 1 / -1; }
-  #view-codec #encodePane { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+  #view-codec #encodePane { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
   #view-codec #encodePane > .hud:first-child { grid-row: span 2; position: sticky; top: 110px; }
   #view-codec #encodePane .grid-w { grid-template-columns: repeat(7, 1fr); }
   #view-codec #encodePane .grid-mb { grid-template-columns: repeat(6, 1fr); }
-  #view-guess, #view-log { grid-template-columns: 1.4fr 1fr; align-items: start; }
+  #view-guess, #view-log { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); align-items: start; }
   #view-guess > .note { grid-column: 1 / -1; }
 }
 
@@ -533,3 +534,4 @@ main {
   h1.glitch::before, h1.glitch::after { animation: none; }
   .ticker-track { animation: none; padding-left: 14px; }
 }
+.seg-sub small { font-size: 9.5px; font-weight: 700; opacity: .8; letter-spacing: .08em; }
