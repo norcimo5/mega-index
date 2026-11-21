@@ -1,0 +1,6 @@
+POWERBALL GUESS  draws=1435  2015-10-07..2026-11-18
+A: 21 23 28 61 64 PB 14  index 195511121  (HOT)
+B: 13 26 34 46 49 PB 16  index 48543757  (COLD)
+C: 21 27 61 63 64 PB 26  index 198152707  (BALANCED)
+NOTE: Fair picks do not improve your odds. Every ticket is 1 in 292,201,338.
+NOTE: Hot/cold is for fun and cannot predict draws; uniform is the default mode.

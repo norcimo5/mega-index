@@ -28,13 +28,30 @@ tests/check_golden.sh src/cpp/build/mega-index
 mega-index encode <w1> <w2> <w3> <w4> <w5> --bonus N [--game megamillions|powerball]
 mega-index decode <index> [--game G]
 mega-index pick [-n 1..5] [--mode uniform|hot|cold|mixed] [--game G] [--export FILE.csv|FILE.json] [--data PATH]
-mega-index stats [--data PATH]
-mega-index guess [--data PATH]
+mega-index stats [--data PATH] [--game G]
+mega-index guess [--data PATH] [--game G]
 ```
 
-History data (`data/draws.csv`) is found via `--data`, then `$MEGA_INDEX_DATA`, then walking up
-from the current directory, then walking up from the executable's directory (`/proc/self/exe`).
-Powerball supports encode, decode, and uniform pick only.
+Each game has its own history file and environment variable:
+
+| game | file | env var |
+|---|---|---|
+| `megamillions` (default) | `data/draws.csv` | `MEGA_INDEX_DATA` |
+| `powerball` | `data/powerball-draws.csv` | `POWER_INDEX_DATA` |
+
+The data file is found via `--data`, then the game's env var, then walking up from the current
+directory, then walking up from the executable's directory (`/proc/self/exe`). Each game reads only
+its own variable. All commands work for both games, including `stats`, `guess` and the
+hot/cold/mixed pick modes:
+
+```
+mega-index stats --game powerball
+mega-index guess --game powerball --data tests/golden/powerball-draws.csv
+POWER_INDEX_DATA=data/powerball-draws.csv mega-index pick --game powerball --mode hot -n 3
+```
+
+A Mega Millions file passed with `--game powerball` (or the reverse) fails with
+`bad data file: line <n>`.
 
 ## Layout
 

@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="only light">
+<meta name="theme-color" content="#e0102f">
+<meta name="description" content="POWER//INDEX: Powerball ticket picker and combinadic index codec. Crypto-uniform picks, hot/cold stats, offline PWA.">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="POWER//INDEX">
+<title>POWER//INDEX</title>
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<script>
+  /* The manifest only makes sense over http(s); on file:// Chrome logs a CORS error for it. */
+  if (/^https?:$/.test(location.protocol)) {
+    var mf = document.createElement("link");
+    mf.rel = "manifest"; mf.href = "manifest.webmanifest";
+    document.head.appendChild(mf);
+  }
+</script>
+<link rel="stylesheet" href="../css/app.css">
+<link rel="stylesheet" href="css/power.css">
+</head>
+<body>
+<div class="fx-grid" aria-hidden="true"></div>
+<div class="fx-scan" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="top-row">
+    <div class="brand">
+      <svg class="brand-ball" viewBox="0 0 40 40" aria-hidden="true">
+        <defs>
+          <radialGradient id="gb" cx="35%" cy="30%" r="75%">
+            <stop offset="0" stop-color="#ff9aa8"/><stop offset=".45" stop-color="#e0102f"/><stop offset="1" stop-color="#6e0011"/>
+          </radialGradient>
+        </defs>
+        <polygon points="8,1 32,1 39,8 39,32 32,39 8,39 1,32 1,8" fill="none" stroke="#1a0710" stroke-width="1.5"/>
+        <polyline points="1,14 1,8 8,1 14,1" fill="none" stroke="#00c2ea" stroke-width="2"/>
+        <circle cx="20" cy="20" r="12.5" fill="url(#gb)" stroke="#1a0710" stroke-width="1"/>
+        <circle cx="20" cy="20" r="6.5" fill="#fff" stroke="#1a0710" stroke-width=".8"/>
+      </svg>
+      <div class="brand-text">
+        <h1 class="glitch" data-text="POWER//INDEX">POWER//INDEX</h1>
+        <div class="sub">POWERBALL &middot; INDEX CODEC</div>
+      </div>
+    </div>
+    <button id="installBtn" class="btn btn-install" type="button" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11m0 0l-4.5-4.5M12 14l4.5-4.5M4 17v3h16v-3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"/></svg>
+      <span>INSTALL</span>
+    </button>
+  </div>
+  <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
+</header>
+
+<div id="updateBar" class="update-bar" hidden>
+  <span>&#9650; NEW BUILD / DRAW DATA READY</span>
+  <button class="btn btn-sm" id="updateReload" type="button">RELOAD</button>
+</div>
+
+<main id="main">
+
+  <!-- ============================================================ PICK -->
+  <section class="view" id="view-pick" data-view="pick" aria-labelledby="t-pick">
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">01</span><h2>SLIP CONFIG</h2><span class="ph-meta" id="pickMeta">RNG: WEB CRYPTO</span></div>
+      <div class="field">
+        <div class="label">PLAYS</div>
+        <div class="seg seg-plays" role="radiogroup" aria-label="Number of plays" id="playsSeg">
+          <button type="button" role="radio" data-v="1">1</button>
+          <button type="button" role="radio" data-v="2">2</button>
+          <button type="button" role="radio" data-v="3">3</button>
+          <button type="button" role="radio" data-v="4">4</button>
+          <button type="button" role="radio" data-v="5" aria-checked="true">5</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">MODE</div>
+        <div class="seg seg-mode" role="radiogroup" aria-label="Pick mode" id="modeSeg">
+          <button type="button" role="radio" data-v="uniform" aria-checked="true">UNIFORM</button>
+          <button type="button" role="radio" data-v="hot">HOT</button>
+          <button type="button" role="radio" data-v="cold">COLD</button>
+          <button type="button" role="radio" data-v="mixed">MIXED</button>
+        </div>
+        <p class="mode-desc" id="modeDesc"></p>
+      </div>
+      <button class="btn btn-primary btn-xl" id="genBtn" type="button">
+        <span class="btn-glyph" aria-hidden="true">&#9654;</span> GENERATE SLIP
+      </button>
+    </div>
+
+    <div class="hud panel slip-panel" id="slipPanel">
+      <div class="panel-head"><span class="ph-tag">02</span><h2>SLIP</h2><span class="ph-meta" id="slipMeta">EMPTY</span></div>
+      <ol class="slip" id="slip" aria-live="polite"></ol>
+      <div class="empty" id="slipEmpty">
+        <div class="empty-glyph" aria-hidden="true">[ &nbsp;&nbsp; ]</div>
+        AWAITING INPUT &mdash; TAP <b>GENERATE SLIP</b>
+      </div>
+      <div class="actions" id="slipActions">
+        <button class="btn" type="button" data-act="copy">COPY</button>
+        <button class="btn" type="button" data-act="csv">CSV</button>
+        <button class="btn" type="button" data-act="json">JSON</button>
+        <button class="btn" type="button" data-act="share" hidden>SHARE</button>
+        <button class="btn btn-danger" type="button" data-act="clear">CLEAR</button>
+      </div>
+    </div>
+
+    <aside class="note" role="note">
+      <div class="note-head">// HONEST NOTE</div>
+      <p class="note-line" data-note="0"></p>
+      <p class="note-line" data-note="1"></p>
+    </aside>
+  </section>
+
+  <!-- ============================================================ CODEC -->
+  <section class="view" id="view-codec" data-view="codec" hidden>
+    <div class="seg seg-sub" role="tablist" aria-label="Codec direction" id="codecSeg">
+      <button type="button" role="tab" data-v="encode" aria-selected="true">ENCODE<br><small>TICKET&rarr;INDEX</small></button>
+      <button type="button" role="tab" data-v="decode">DECODE<br><small>INDEX&rarr;TICKET</small></button>
+    </div>
+
+    <div id="encodePane">
+      <div class="hud panel">
+        <div class="panel-head"><span class="ph-tag">EN</span><h2>SELECT 5 + 1</h2><span class="ph-meta" id="encCount">0/5 &middot; 0/1</span></div>
+        <div class="enc-readout" id="encSlots" aria-live="polite"></div>
+        <div class="enc-result" id="encResult">
+          <div class="label">INDEX</div>
+          <div class="big-idx" id="encIdx">&mdash;</div>
+          <div class="enc-msg" id="encMsg">Pick 5 white balls and 1 Powerball.</div>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" id="encLucky">RANDOM</button>
+          <button class="btn" type="button" id="encCopy" disabled>COPY</button>
+          <button class="btn" type="button" id="encToDec" disabled>&rarr; DECODE</button>
+          <button class="btn btn-danger" type="button" id="encClear">CLEAR</button>
+        </div>
+      </div>
+      <div class="hud panel">
+        <div class="panel-head"><span class="ph-tag">W</span><h2>WHITE BALLS 1&ndash;69</h2><span class="ph-meta">PICK 5</span></div>
+        <div class="num-grid grid-w" id="gridW" role="group" aria-label="White balls 1 to 69"></div>
+      </div>
+      <div class="hud panel">
+        <div class="panel-head"><span class="ph-tag ph-gold">PB</span><h2>POWERBALL 1&ndash;26</h2><span class="ph-meta">PICK 1</span></div>
+        <div class="num-grid grid-mb" id="gridMB" role="group" aria-label="Powerball 1 to 26"></div>
+      </div>
+    </div>
+
+    <div id="decodePane" hidden>
+      <div class="hud panel">
+        <div class="panel-head"><span class="ph-tag">DE</span><h2>INDEX &rarr; TICKET</h2><span class="ph-meta">0 &hellip; 292,201,337</span></div>
+        <form id="decForm" class="dec-form" autocomplete="off">
+          <label class="label" for="decInput">INDEX</label>
+          <div class="dec-row">
+            <input id="decInput" class="dec-input" inputmode="numeric" enterkeyhint="go" spellcheck="false" placeholder="146100669" aria-describedby="decMsg">
+            <button class="btn btn-primary" type="submit">DECODE</button>
+          </div>
+        </form>
+        <div class="enc-msg" id="decMsg" role="status"></div>
+        <div class="dec-ticket" id="decTicket"></div>
+        <pre class="trace" id="decTrace" aria-label="Decode trace"></pre>
+        <div class="actions">
+          <button class="btn" type="button" id="decRandom">RANDOM INDEX</button>
+          <button class="btn" type="button" id="decCopy" disabled>COPY</button>
+          <button class="btn" type="button" id="decToEnc" disabled>&rarr; ENCODE</button>
+        </div>
+      </div>
+      <div class="hud panel mini">
+        <div class="panel-head"><span class="ph-tag">REF</span><h2>KNOWN VECTORS</h2></div>
+        <div class="vectors" id="vectors"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ GUESS -->
+  <section class="view" id="view-guess" data-view="guess" hidden>
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">03</span><h2>DETERMINISTIC GUESS</h2><span class="ph-meta" id="guessMeta"></span></div>
+      <p class="mode-desc">Built from the draw history: no randomness, same result on every device for the same data.</p>
+      <ol class="slip guess" id="guessList"></ol>
+      <div class="actions">
+        <button class="btn" type="button" data-gact="copy">COPY</button>
+        <button class="btn" type="button" data-gact="csv">CSV</button>
+        <button class="btn" type="button" data-gact="json">JSON</button>
+        <button class="btn" type="button" data-gact="share" hidden>SHARE</button>
+      </div>
+    </div>
+    <div class="hud panel mini">
+      <div class="panel-head"><span class="ph-tag">?</span><h2>HOW IT'S BUILT</h2></div>
+      <dl class="rules">
+        <dt class="t-hot">HOT</dt><dd>5 most-drawn whites + most-drawn Powerball</dd>
+        <dt class="t-cold">COLD</dt><dd>5 least-drawn whites + least-drawn Powerball</dd>
+        <dt class="t-bal">BALANCED</dt><dd>top 3 hot whites + 2 most overdue + most overdue Powerball</dd>
+      </dl>
+    </div>
+    <aside class="note" role="note">
+      <div class="note-head">// HONEST NOTE</div>
+      <p class="note-line" data-note="0"></p>
+      <p class="note-line" data-note="1"></p>
+      <p class="note-line">Every draw is independent; weighted picks are not uniform. Uniform stays the default.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================ STATS -->
+  <section class="view" id="view-stats" data-view="stats" hidden>
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">04</span><h2>DATA LINK</h2><span class="ph-meta">NY OPEN DATA</span></div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">W</span><h2>WHITE BALLS</h2>
+        <div class="seg seg-tiny" id="wMetricSeg" role="radiogroup" aria-label="White chart metric">
+          <button type="button" role="radio" data-v="freq" aria-checked="true">FREQ</button>
+          <button type="button" role="radio" data-v="gap">GAP</button>
+        </div>
+      </div>
+      <div class="legend" id="wLegend"></div>
+      <div class="chart" id="chartW"></div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+      <div class="label heat-label">HEATMAP &middot; TAP A NUMBER</div>
+      <div class="heat" id="heatW" role="group" aria-label="White ball heatmap"></div>
+      <div class="heat-scale" aria-hidden="true"><span>COLD</span><i></i><span>HOT</span></div>
+    </div>
+
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag ph-gold">PB</span><h2>POWERBALL</h2>
+        <div class="seg seg-tiny" id="bMetricSeg" role="radiogroup" aria-label="Powerball chart metric">
+          <button type="button" role="radio" data-v="freq" aria-checked="true">FREQ</button>
+          <button type="button" role="radio" data-v="gap">GAP</button>
+        </div>
+      </div>
+      <div class="chart" id="chartB"></div>
+      <div class="detail" id="detailB" aria-live="polite"></div>
+    </div>
+
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">OD</span><h2>OVERDUE</h2><span class="ph-meta">DRAWS SINCE LAST SEEN</span></div>
+      <div class="od-cols">
+        <div><div class="label">WHITES &middot; TOP 12</div><div class="hbars" id="odW"></div></div>
+        <div><div class="label">POWERBALL &middot; TOP 6</div><div class="hbars" id="odB"></div></div>
+      </div>
+    </div>
+
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">&chi;&sup2;</span><h2>FAIRNESS CHECK</h2><span class="ph-meta">CHI-SQUARE</span></div>
+      <div class="chi" id="chi"></div>
+    </div>
+
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">RK</span><h2>RANKINGS</h2></div>
+      <div class="ranks" id="ranks"></div>
+    </div>
+    <aside class="note" role="note">
+      <div class="note-head">// HONEST NOTE</div>
+      <p class="note-line">Every ticket is 1 in 292,201,338 on every draw. Frequencies wobble around the expected line by chance alone; hot/cold is for fun and cannot predict draws.</p>
+    </aside>
+  </section>
+
+  <!-- ============================================================ LOG -->
+  <section class="view" id="view-log" data-view="log" hidden>
+    <div class="hud panel">
+      <div class="panel-head"><span class="ph-tag">05</span><h2>SLIP LOG</h2><span class="ph-meta" id="logMeta"></span></div>
+      <p class="mode-desc">Slips you generated, stored only on this device. Tap RESTORE to load one back into the picker.</p>
+      <ol class="log" id="logList"></ol>
+      <div class="empty" id="logEmpty"><div class="empty-glyph" aria-hidden="true">[ LOG ]</div>NO SLIPS YET</div>
+      <div class="actions"><button class="btn btn-danger" type="button" id="logClear">WIPE LOG</button></div>
+    </div>
+    <div class="hud panel mini">
+      <div class="panel-head"><span class="ph-tag">i</span><h2>ABOUT</h2></div>
+      <div class="about">
+        <p>Each ticket maps to one integer in <b>0&hellip;292,201,337</b> via the combinatorial number system (colex order): <code>I = 26&middot;&Sigma;C(c<sub>i</sub>&minus;1, i) + (PB&minus;1)</code>.</p>
+        <p>Uniform picks draw <code>randbelow(292,201,338)</code> from <code>crypto.getRandomValues</code> with rejection sampling (no modulo bias), then decode it.</p>
+        <p class="about-meta" id="aboutMeta"></p>
+        <p class="switch"><a class="switch-link" href="../">SWITCH TO MEGA//INDEX <span aria-hidden="true">&#8644;</span></a></p>
+        <div id="installHelpInline"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar" aria-label="Sections">
+  <a href="#pick" class="tab" data-tab="pick" id="t-pick">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4.2"/><circle cx="16.5" cy="15" r="4.2"/><path d="M3 21h18"/></svg><span>PICK</span></a>
+  <a href="#encode" class="tab" data-tab="codec">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h11l-3-3M20 17H9l3 3"/><path d="M4 12h16" stroke-dasharray="2 2"/></svg><span>CODEC</span></a>
+  <a href="#guess" class="tab" data-tab="guess">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.6 6.2L21 9l-5 4.4L17.5 20 12 16.6 6.5 20 8 13.4 3 9l6.4-.8z"/></svg><span>GUESS</span></a>
+  <a href="#stats" class="tab" data-tab="stats">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M9.3 20V4M14.6 20v-8M20 20V7M2 20.5h20"/></svg><span>STATS</span></a>
+  <a href="#log" class="tab" data-tab="log">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h10l4 4v14H5z"/><path d="M8 10h8M8 14h8M8 18h5"/></svg><span>LOG</span></a>
+</nav>
+
+<div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+<div class="sheet hud" id="installSheet" role="dialog" aria-modal="true" aria-labelledby="installTitle" hidden>
+  <div class="panel-head"><span class="ph-tag">PWA</span><h2 id="installTitle">INSTALL POWER//INDEX</h2></div>
+  <div id="installHelp"></div>
+  <button class="btn btn-primary btn-xl" type="button" id="sheetClose">GOT IT</button>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<noscript><div class="noscript">POWER//INDEX needs JavaScript.</div></noscript>
+
+<script>
+  /* POWER//INDEX shares ../js with MEGA//INDEX. MEGA's scope (/) contains /power/, so before our own
+   * worker is installed this page can be controlled by MEGA's worker, which may hold older copies of
+   * the shared scripts. In that case hand over to ./sw.js and reload once instead of running them. */
+  window.APP_GAME = "powerball";
+  (function () {
+    var SCRIPTS = ["js/draws-data.js", "../js/core.js", "../js/charts.js", "../js/app.js"];
+    var booted = false;
+    function boot() {
+      if (booted) return;
+      booted = true;
+      SCRIPTS.forEach(function (src) {
+        var s = document.createElement("script");
+        s.src = src; s.async = false;
+        document.body.appendChild(s);
+      });
+    }
+    var sw = navigator.serviceWorker, c = sw && sw.controller;
+    if (!/^https?:$/.test(location.protocol) || !c || c.scriptURL === new URL("sw.js", location.href).href) { boot(); return; }
+    var t = setTimeout(boot, 6000);
+    sw.addEventListener("controllerchange", function () { if (!booted) { clearTimeout(t); location.reload(); } });
+    sw.register("./sw.js", { updateViaCache: "none" }).catch(function () { clearTimeout(t); boot(); });
+  })();
+</script>
+</body>
+</html>

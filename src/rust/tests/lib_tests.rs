@@ -124,8 +124,6 @@ fn cli_errors_and_exit_codes() {
     assert_eq!(run(&args("pick x")).stderr, "error: unexpected argument 'x'\n");
     assert_eq!(run(&args("pick --mode lucky")).stderr, "error: unknown mode 'lucky'\n");
     assert_eq!(run(&args("pick --export a.txt")).stderr, "error: export path must end in .csv or .json\n");
-    let r = run(&args("pick --mode hot --game powerball"));
-    assert_eq!((r.code, r.stderr.as_str()), (2, "error: no draw history for Powerball\n"));
     let r = run(&args("stats --data /no/such/file.csv"));
     assert_eq!((r.code, r.stderr.as_str()), (1, "error: cannot read data file '/no/such/file.csv'\n"));
     assert_eq!(run(&[]).code, 2);
@@ -238,6 +236,45 @@ fn weighted_picks_valid_and_distinct() {
 }
 
 #[test]
+fn powerball_weighted_picks() {
+    let draws = parse_draws(&golden("powerball-draws.csv"), &PB).unwrap();
+    assert_eq!(draws.len(), 1435);
+    let st = Stats::new(&PB, &draws);
+    let mut rng = |n: u64| randbelow(n);
+    for mode in [Mode::Hot, Mode::Cold, Mode::Mixed] {
+        for _ in 0..2000 {
+            let t: Ticket = make_pick(&PB, mode, Some(&st), &mut rng);
+            check_valid(&PB, &t.whites, t.bonus);
+            assert_eq!(encode(&PB, &t.whites, t.bonus), t.index);
+        }
+    }
+    // mixed over a 69-ball pool: rng=0 takes 1,2,3 hot then the first 2 remaining cold numbers
+    let mut zero = |_n: u64| 0;
+    let t = make_pick(&PB, Mode::Hot, Some(&st), &mut zero);
+    assert_eq!((t.whites, t.bonus), (vec![1, 2, 3, 4, 5], 1));
+    let r = run(&args("pick -n 3 --mode mixed --game powerball --data ../../tests/golden/powerball-draws.csv"));
+    assert_eq!(r.code, 0);
+    assert!(r.stdout.starts_with("POWERBALL PICK  mode=mixed  plays=3\n"));
+    assert!(r.stdout.lines().nth(1).unwrap().contains(" PB "));
+}
+
+#[test]
+fn powerball_stats_and_guess() {
+    let draws = parse_draws(&golden("powerball-draws.csv"), &PB).unwrap();
+    assert_eq!(Stats::new(&PB, &draws).report(), golden("pb_stats.txt"));
+    let r = run(&args("guess --game powerball --data ../../tests/golden/powerball-draws.csv"));
+    assert_eq!((r.code, r.stdout.as_str()), (0, golden("pb_guess.txt").as_str()));
+    let r = run(&args("stats --game powerball --data ../../tests/golden/powerball-draws.csv"));
+    assert_eq!(r.stdout, golden("pb_stats.txt"));
+    // a Mega Millions file is wrong data for Powerball (first white 70), and vice versa
+    let r = run(&args("stats --game powerball --data ../../tests/golden/draws.csv"));
+    assert_eq!(r.code, 1);
+    assert!(r.stderr.starts_with("error: bad data file: line "));
+    let r = run(&args("stats --data ../../tests/golden/powerball-draws.csv"));
+    assert_eq!(r.code, 1);
+}
+
+#[test]
 fn golden_stats_and_guess() {
     let st = golden_stats();
     assert_eq!(st.report(), golden("stats.txt"));
@@ -306,20 +343,67 @@ fn data_path_discovery() {
     let csv_s = csv.to_string_lossy().into_owned();
     let other = root.join("elsewhere/data");
     // 1. --data wins over env
-    assert_eq!(resolve_data_path(Some("A"), Some("B"), Some(&deep_cwd), None).unwrap(), "A");
+    assert_eq!(resolve_data_path(&MM, Some("A"), Some("B"), Some(&deep_cwd), None).unwrap(), "A");
     // 2. env wins over walks; empty env ignored
-    assert_eq!(resolve_data_path(None, Some("B"), Some(&proj), None).unwrap(), "B");
+    assert_eq!(resolve_data_path(&MM, None, Some("B"), Some(&proj), None).unwrap(), "B");
     // 3. walk up from cwd
     std::fs::create_dir_all(&other).unwrap();
-    assert!(resolve_data_path(None, Some(""), Some(&deep_cwd), None).is_err());
+    assert!(resolve_data_path(&MM, None, Some(""), Some(&deep_cwd), None).is_err());
     let sub = proj.join("src/rust");
-    assert_eq!(resolve_data_path(None, None, Some(&sub), None).unwrap(), csv_s);
+    assert_eq!(resolve_data_path(&MM, None, None, Some(&sub), None).unwrap(), csv_s);
     // 4. walk up from executable dir when cwd finds nothing
-    assert_eq!(resolve_data_path(None, None, Some(&deep_cwd), Some(&exe_dir)).unwrap(), csv_s);
+    assert_eq!(resolve_data_path(&MM, None, None, Some(&deep_cwd), Some(&exe_dir)).unwrap(), csv_s);
     // 5. not found
-    let e = resolve_data_path(None, None, Some(&deep_cwd), None).unwrap_err();
+    let e = resolve_data_path(&MM, None, None, Some(&deep_cwd), None).unwrap_err();
     assert_eq!((e.code, e.msg.as_str()), (1, "data file not found (use --data or MEGA_INDEX_DATA)"));
+    // Powerball: own file name and own env var, never MEGA_INDEX_DATA
+    let pcsv = proj.join("data/powerball-draws.csv");
+    std::fs::write(&pcsv, "x").unwrap();
+    let pcsv_s = pcsv.to_string_lossy().into_owned();
+    assert_eq!(resolve_data_path(&PB, None, None, Some(&sub), None).unwrap(), pcsv_s);
+    assert_eq!(resolve_data_path(&PB, None, None, Some(&deep_cwd), Some(&exe_dir)).unwrap(), pcsv_s);
+    assert_eq!(resolve_data_path(&PB, None, Some("P"), Some(&sub), None).unwrap(), "P");
+    std::fs::remove_file(&pcsv).unwrap();
+    let e = resolve_data_path(&PB, None, None, Some(&sub), None).unwrap_err();
+    assert_eq!((e.code, e.msg.as_str()), (1, "data file not found (use --data or POWER_INDEX_DATA)"));
     std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn power_index_data_env_is_per_game() {
+    // spawn the real binary so env handling is exercised end to end
+    let bin = env!("CARGO_BIN_EXE_mega-index");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden/powerball-draws.csv");
+    let run_bin = |argv: &[&str], var: &str| {
+        std::process::Command::new(bin)
+            .args(argv)
+            .env_remove("MEGA_INDEX_DATA")
+            .env_remove("POWER_INDEX_DATA")
+            .env(var, &fixture)
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap()
+    };
+    let o = run_bin(&["stats", "--game", "powerball"], "POWER_INDEX_DATA");
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(String::from_utf8(o.stdout).unwrap(), golden("pb_stats.txt"));
+    // the other game's variable is ignored: a bogus path there is never read
+    // (the walk from the exe dir may still find the repo's own data file)
+    let bogus = |argv: &[&str], var: &str| {
+        let o = std::process::Command::new(bin)
+            .args(argv)
+            .env_remove("MEGA_INDEX_DATA")
+            .env_remove("POWER_INDEX_DATA")
+            .env(var, "/no/such/file.csv")
+            .current_dir(std::env::temp_dir())
+            .output()
+            .unwrap();
+        String::from_utf8(o.stderr).unwrap()
+    };
+    assert!(!bogus(&["stats", "--game", "powerball"], "MEGA_INDEX_DATA").contains("/no/such"));
+    assert!(!bogus(&["stats"], "POWER_INDEX_DATA").contains("/no/such"));
+    assert!(bogus(&["stats", "--game", "powerball"], "POWER_INDEX_DATA").contains("cannot read data file '/no/such/file.csv'"));
+    assert!(bogus(&["stats"], "MEGA_INDEX_DATA").contains("cannot read data file '/no/such/file.csv'"));
 }
 
 #[cfg(unix)]

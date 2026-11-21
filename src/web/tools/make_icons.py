@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Generate the MEGA//INDEX PWA icons (PIL). Run: python3 src/web/tools/make_icons.py
-Writes src/web/icons/{icon-192,icon-512,icon-maskable-512,apple-touch-icon,favicon-32,favicon-16}.png
-and favicon.ico. Emblem: gold Mega Ball inside a chamfered HUD frame with cyan/magenta glitch offsets."""
+"""Generate the PWA icons (PIL).
+  python3 src/web/tools/make_icons.py          -> src/web/icons/        MEGA//INDEX: gold Mega Ball "24"
+  python3 src/web/tools/make_icons.py power    -> src/web/power/icons/  POWER//INDEX: red Powerball "26"
+Writes {icon-192,icon-512,icon-maskable-512,apple-touch-icon,favicon-32,favicon-16}.png and favicon.ico.
+Emblem: the bonus ball inside a chamfered HUD frame with two-color glitch offsets."""
 import math
 import os
+import sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +21,14 @@ GOLD = (242, 183, 5)
 GOLD_HI = (255, 230, 120)
 GOLD_LO = (176, 120, 0)
 BG = (250, 252, 255)
+FRAME = BLUE
+GRID = BLUE
+GLITCH_A, GLITCH_B = MAGENTA, CYAN
+LABEL = "24"
+
+POWER = dict(INK=(26, 7, 16), FRAME=(26, 7, 16), GRID=(224, 16, 47), GLITCH_A=(224, 16, 47), GLITCH_B=(0, 200, 240),
+             GOLD=(224, 16, 47), GOLD_HI=(255, 140, 156), GOLD_LO=(110, 0, 17), BG=(255, 240, 242), LABEL="26",
+             OUT=os.path.join(HERE, "..", "power", "icons"))
 
 
 def chamfer(cx, cy, r, c):
@@ -39,8 +50,8 @@ def emblem(S, scale, full_bleed):
     grid = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     gd = ImageDraw.Draw(grid)
     for i in range(17):
-        gd.line([(i * step, 0), (i * step, S)], fill=BLUE + (28,), width=max(1, S // 256))
-        gd.line([(0, i * step), (S, i * step)], fill=BLUE + (28,), width=max(1, S // 256))
+        gd.line([(i * step, 0), (i * step, S)], fill=GRID + (28,), width=max(1, S // 256))
+        gd.line([(0, i * step), (S, i * step)], fill=GRID + (28,), width=max(1, S // 256))
     mask = Image.new("L", (S, S), 0)
     ImageDraw.Draw(mask).polygon(chamfer(cx, cy, R, R * 0.28), fill=255) if not full_bleed else \
         ImageDraw.Draw(mask).rectangle([0, 0, S, S], fill=255)
@@ -49,11 +60,11 @@ def emblem(S, scale, full_bleed):
     w = max(2, int(S * 0.022))
     fr = R * 0.92
     off = S * 0.012
-    for col, dx in ((MAGENTA, -off), (CYAN, off)):
+    for col, dx in ((GLITCH_A, -off), (GLITCH_B, off)):
         pts = chamfer(cx + dx, cy, fr, fr * 0.28)
         d.line(pts + [pts[0]], fill=col + (255,), width=w, joint="curve")
     pts = chamfer(cx, cy, fr, fr * 0.28)
-    d.line(pts + [pts[0]], fill=BLUE + (255,), width=w, joint="curve")
+    d.line(pts + [pts[0]], fill=FRAME + (255,), width=w, joint="curve")
     # corner ticks
     t = fr * 0.18
     for sx in (-1, 1):
@@ -92,8 +103,8 @@ def emblem(S, scale, full_bleed):
     d.ellipse([cx - ir, cy - ir, cx + ir, cy + ir], fill=(255, 255, 255, 255), outline=INK + (255,),
               width=max(1, int(S * 0.008)))
     font = ImageFont.truetype(FONT, int(ir * 1.05))
-    txt = "24"
-    for col, dx in ((MAGENTA, -S * 0.008), (CYAN, S * 0.008), (INK, 0)):
+    txt = LABEL
+    for col, dx in ((GLITCH_A, -S * 0.008), (GLITCH_B, S * 0.008), (INK, 0)):
         d.text((cx + dx, cy + S * 0.004), txt, font=font, fill=col + (255,), anchor="mm")
     # scanlines over the ball
     sl = Image.new("RGBA", (S, S), (0, 0, 0, 0))
@@ -113,6 +124,10 @@ def render(size, scale, full_bleed):
 
 
 def main():
+    if len(sys.argv) > 1:
+        if sys.argv[1] != "power":
+            sys.exit("usage: make_icons.py [power]")
+        globals().update(POWER)
     os.makedirs(OUT, exist_ok=True)
     out = {}
     out["icon-512.png"] = render(512, 0.98, False)

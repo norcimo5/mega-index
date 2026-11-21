@@ -13,6 +13,7 @@ you get a perfectly fair, pattern-free ticket.
 > **Honest note.** This makes picks fair and pattern-free. It does **not** improve your odds.
 > Every ticket is equally likely: **1 in 290,472,336**. Hot/cold analysis cannot predict
 > anything, and weighted picks are not uniform, so plain uniform random is the default.
+> The same holds for Powerball (5 of 1-69 plus a Powerball 1-26): **1 in 292,201,338**.
 
 ## // LIVE APP
 
@@ -27,6 +28,24 @@ A static, offline-capable PWA (no backend). Light-mode cyberpunk HUD, built for 
    (three dots, or the menu icon in Samsung Internet) and choose **Install app** or
    **Add to Home screen**.
 3. Confirm. The app now launches full-screen from your home screen and works offline.
+
+## // POWER//INDEX (POWERBALL)
+
+The same engine also covers Powerball, with its own installable PWA that shares the code
+and styling of the Mega Millions app.
+
+**https://norcimo5.github.io/mega-index/power/**
+
+Install on Android: open the link above in Chrome or Samsung Internet, tap the in-app
+**Install** button (or browser menu, **Install app** / **Add to Home screen**), and confirm.
+It is a separate app from MEGA//INDEX and works offline on its own.
+
+- Powerball history since the current matrix began on **2015-10-07**: 1,435 draws
+  (Double Play ignored). Stats summary: [`docs/POWERBALL-STATS.md`](docs/POWERBALL-STATS.md).
+- CLI: add `--game powerball` to the Python, Rust or C++ CLI, e.g.
+  `python3 src/python3/mega_index.py --game powerball pick`.
+- Data file: `data/powerball-draws.csv`, or point `POWER_INDEX_DATA` (instead of
+  `MEGA_INDEX_DATA`) at another copy, or pass `--data PATH`.
 
 ## // THE FOUR VERSIONS
 
@@ -69,9 +88,13 @@ filtered to draws on or after **2025-04-08** (the current 70/24 matrix).
 - `data/draws.csv` is the canonical file read by every CLI.
 - `src/web/js/draws-data.js` is the generated copy used by the web app (do not edit by hand).
 - Refresh locally: `python3 tools/refresh_data.py` (use `--offline` to rebuild from the saved raw CSV).
-- A GitHub Actions workflow refreshes the data every Wednesday and Saturday (after the
-  Tuesday and Friday draws) and commits any change.
-- Stats summary: [`docs/STATS.md`](docs/STATS.md).
+- Powerball: [Lottery Powerball Winning Numbers: Beginning 2010](https://data.ny.gov/d/d6yy-54nr),
+  filtered to draws on or after **2015-10-07**; canonical file `data/powerball-draws.csv`,
+  web copy `src/web/power/js/draws-data.js`.
+- `python3 tools/refresh_data.py --game megamillions|powerball|all` (default all).
+- A GitHub Actions workflow refreshes both games the morning after each draw
+  (Mon/Wed/Sat Powerball, Tue/Fri Mega Millions) and commits any change.
+- Stats summaries: [`docs/STATS.md`](docs/STATS.md), [`docs/POWERBALL-STATS.md`](docs/POWERBALL-STATS.md).
 
 ## // REPO LAYOUT
 
@@ -79,7 +102,7 @@ filtered to draws on or after **2025-04-08** (the current 70/24 matrix).
 src/python3/   Python CLI + unit tests
 src/rust/      Rust crate (binary: mega-index)
 src/cpp/       C++17 CLI (CMake + Makefile)
-src/web/       static PWA (index.html, css/, js/, icons/, sw.js, manifest)
+src/web/       static PWA (index.html; power/ is POWER//INDEX, css/, js/, icons/, sw.js, manifest)
 data/          draws.csv and the raw NY Open Data download
 tools/         reference oracle, golden generator, data refresh
 tests/         golden vectors + conformance runner (check_golden.sh)

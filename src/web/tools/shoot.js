@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* Headless-Chrome harness via the DevTools protocol (Node built-in WebSocket; no puppeteer).
  * Usage: node src/web/tools/shoot.js <baseUrl> <outDir> [plan.json]
+ * SHOT_PREFIX=power- prefixes every screenshot name (POWER//INDEX: base .../power/).
  * Takes screenshots, collects console errors/exceptions, checks layout width.
  * Default plan = the screenshots used in the summary page. Exit code 1 on console errors
  * or horizontal overflow. */
@@ -116,7 +117,7 @@ async function main() {
     if (s.full) { await sleep(200); m.h = await evaluate("document.documentElement.scrollHeight"); shotParams.clip.height = m.h; }
     if (!s.noShot) {
       var shot = await send("Page.captureScreenshot", shotParams);
-      fs.writeFileSync(path.join(outDir, s.name + ".png"), Buffer.from(shot.data, "base64"));
+      fs.writeFileSync(path.join(outDir, (process.env.SHOT_PREFIX || "") + s.name + ".png"), Buffer.from(shot.data, "base64"));
     }
     var overflow = m.iw > dev.width || m.sw > dev.width || m.bw > dev.width;
     report.push(s.name + ": innerWidth=" + m.iw + " scrollWidth=" + m.sw + " height=" + m.h + " swControlled=" + m.ctl +

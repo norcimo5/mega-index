@@ -5,9 +5,9 @@ import sys
 
 from .core import validate_ticket
 from .errors import CliError
+from .game import MEGA_MILLIONS
 
 HEADER = "date,w1,w2,w3,w4,w5,mb"
-DATA_ENV = "MEGA_INDEX_DATA"
 _DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")   # ASCII digits only, whole field
 _NUM_RE = re.compile(r"[+-]?[0-9]+")
 _EOL_RE = re.compile(r"\r\n|\r|\n")                    # the only line separators
@@ -15,10 +15,10 @@ _WS = " \t\r\v\f"                                       # the only whitespace ar
 _BOM = b"\xef\xbb\xbf"
 
 
-def _walk_up(start):
+def _walk_up(start, data_file):
     d = start
     while True:
-        p = os.path.join(d, "data", "draws.csv")
+        p = os.path.join(d, "data", data_file)
         if os.path.isfile(p):
             return p
         parent = os.path.dirname(d)
@@ -27,13 +27,13 @@ def _walk_up(start):
         d = parent
 
 
-def find_data(data_opt=None, cwd=None, script_dir=None, environ=None):
-    """Resolve the draws.csv path: --data, $MEGA_INDEX_DATA, walk up from cwd,
-    walk up from the script directory, else error (exit 1)."""
+def find_data(data_opt=None, cwd=None, script_dir=None, environ=None, g=MEGA_MILLIONS):
+    """Resolve the game's data path: --data, the game's env var (MEGA_INDEX_DATA or
+    POWER_INDEX_DATA), walk up from cwd, walk up from the script directory, else error (exit 1)."""
     environ = os.environ if environ is None else environ
     if data_opt is not None:
         return data_opt
-    env = environ.get(DATA_ENV, "")
+    env = environ.get(g.data_env, "")
     if env:
         return env
     try:
@@ -47,10 +47,10 @@ def find_data(data_opt=None, cwd=None, script_dir=None, environ=None):
     except OSError:
         script_dir = None
     for start in (cwd, script_dir):
-        p = _walk_up(start) if start else None
+        p = _walk_up(start, g.data_file) if start else None
         if p:
             return p
-    raise CliError("data file not found (use --data or MEGA_INDEX_DATA)", 1)
+    raise CliError("data file not found (use --data or %s)" % g.data_env, 1)
 
 
 def load_draws(path, g):
@@ -85,11 +85,6 @@ def load_draws(path, g):
         raise CliError("bad data file: no draws", 1)
     draws.sort(key=lambda d: d[0])   # stable
     return draws
-
-
-def need_history(g):
-    if not g.has_history:
-        raise CliError("no draw history for %s" % g.name)
 
 
 class Stats:

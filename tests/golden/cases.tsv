@@ -28,8 +28,6 @@ err_plays	2	pick -n 6
 err_mode	2	pick --mode lucky
 err_game	2	pick --game keno
 err_export_ext	2	pick --export picks.txt
-err_pb_hot	2	pick --mode hot --game powerball
-err_pb_stats	2	stats --game powerball
 err_unknown_cmd	2	frobnicate
 err_unknown_opt	2	encode 1 2 3 4 5 --bonus 1 --wat
 err_data_missing	1	stats --data tests/golden/no-such-file.csv
@@ -40,3 +38,9 @@ err_data_unicode_digit	1	stats --data tests/golden/bad_digit.csv
 err_data_underscore	1	stats --data tests/golden/bad_underscore.csv
 err_data_nel	1	stats --data tests/golden/bad_nel.csv
 err_data_header_nbsp	1	stats --data tests/golden/bad_header.csv
+encode_pb_sample	0	encode 7 19 33 48 62 --bonus 11 --game powerball
+pb_stats	0	stats --game powerball --data tests/golden/powerball-draws.csv
+pb_guess	0	guess --game powerball --data tests/golden/powerball-draws.csv
+err_pb_wrong_data	1	stats --game powerball --data tests/golden/draws.csv
+err_mm_wrong_data	1	guess --data tests/golden/powerball-draws.csv
+err_pb_data_missing	1	guess --game powerball --data tests/golden/no-such-file.csv

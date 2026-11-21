@@ -102,11 +102,11 @@ pub fn load_draws(path: &str, g: &Game) -> Result<Vec<Draw>> {
     parse_draws(&String::from_utf8_lossy(&bytes), g)
 }
 
-/// Walk up from `start` looking for `<dir>/data/draws.csv`.
-pub fn walk_up(start: &Path) -> Option<PathBuf> {
+/// Walk up from `start` looking for `<dir>/data/<data_file>`.
+pub fn walk_up(start: &Path, data_file: &str) -> Option<PathBuf> {
     let mut d: &Path = start;
     loop {
-        let p = d.join("data").join("draws.csv");
+        let p = d.join("data").join(data_file);
         if p.is_file() {
             return Some(p);
         }
@@ -119,6 +119,7 @@ pub fn walk_up(start: &Path) -> Option<PathBuf> {
 
 /// Data path resolution (testable): --data, env, cwd walk, executable-dir walk.
 pub fn resolve_data_path(
+    g: &Game,
     opt: Option<&str>,
     env: Option<&str>,
     cwd: Option<&Path>,
@@ -133,20 +134,20 @@ pub fn resolve_data_path(
         }
     }
     for start in [cwd, exe_dir].into_iter().flatten() {
-        if let Some(p) = walk_up(start) {
+        if let Some(p) = walk_up(start, g.data_file) {
             return Ok(crate::osarg::decode(p.as_os_str()));
         }
     }
-    Err(CliError::runtime("data file not found (use --data or MEGA_INDEX_DATA)"))
+    Err(CliError::runtime(format!("data file not found (use --data or {})", g.data_env)))
 }
 
 /// Resolve using the real process environment.
-pub fn find_data(opt: Option<&str>) -> Result<String> {
-    let env = std::env::var_os("MEGA_INDEX_DATA").map(|v| crate::osarg::decode(&v));
+pub fn find_data(g: &Game, opt: Option<&str>) -> Result<String> {
+    let env = std::env::var_os(g.data_env).map(|v| crate::osarg::decode(&v));
     let cwd = std::env::current_dir().ok();
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| std::fs::canonicalize(&p).ok().or(Some(p)))
         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
-    resolve_data_path(opt, env.as_deref(), cwd.as_deref(), exe_dir.as_deref())
+    resolve_data_path(g, opt, env.as_deref(), cwd.as_deref(), exe_dir.as_deref())
 }

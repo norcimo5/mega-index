@@ -11,7 +11,8 @@ pub struct Game {
     pub bonus_name: &'static str,
     pub bonus_abbr: &'static str,
     pub matrix_start: &'static str,
-    pub has_history: bool,
+    pub data_file: &'static str,
+    pub data_env: &'static str,
 }
 
 pub const MEGA_MILLIONS: Game = Game {
@@ -24,7 +25,8 @@ pub const MEGA_MILLIONS: Game = Game {
     bonus_name: "Mega Ball",
     bonus_abbr: "MB",
     matrix_start: "2025-04-08",
-    has_history: true,
+    data_file: "draws.csv",
+    data_env: "MEGA_INDEX_DATA",
 };
 
 pub const POWERBALL: Game = Game {
@@ -37,7 +39,8 @@ pub const POWERBALL: Game = Game {
     bonus_name: "Powerball",
     bonus_abbr: "PB",
     matrix_start: "2015-10-07",
-    has_history: false,
+    data_file: "powerball-draws.csv",
+    data_env: "POWER_INDEX_DATA",
 };
 
 pub const GAMES: [Game; 2] = [MEGA_MILLIONS, POWERBALL];

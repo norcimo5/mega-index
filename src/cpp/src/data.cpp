@@ -68,10 +68,10 @@ bool is_date(const std::string& s) {
     return true;
 }
 
-bool walk_up(std::string d, std::string& found) {
+bool walk_up(std::string d, const std::string& file, std::string& found) {
     if (d.empty()) return false;
     for (;;) {
-        std::string p = (d == "/" ? "" : d) + "/data/draws.csv";
+        std::string p = (d == "/" ? "" : d) + "/data/" + file;
         if (is_file(p)) {
             found = p;
             return true;
@@ -97,19 +97,23 @@ DataEnv DataEnv::from_process() {
     DataEnv e;
     const char* v = std::getenv("MEGA_INDEX_DATA");
     if (v) e.env_data = v;
+    v = std::getenv("POWER_INDEX_DATA");
+    if (v) e.env_data_pb = v;
     char buf[4096];
     if (::getcwd(buf, sizeof buf)) e.cwd = buf;
     e.exe_dir = exe_directory();
     return e;
 }
 
-std::string find_data(const std::string* cli_path, const DataEnv& env) {
+std::string find_data(const std::string* cli_path, const DataEnv& env, const Game& g) {
     if (cli_path) return *cli_path;
-    if (!env.env_data.empty()) return env.env_data;
+    const bool pb = std::string(g.id) == "powerball";
+    const std::string& ev = pb ? env.env_data_pb : env.env_data;
+    if (!ev.empty()) return ev;
     std::string found;
-    if (walk_up(env.cwd, found)) return found;
-    if (walk_up(env.exe_dir, found)) return found;
-    throw CliError("data file not found (use --data or MEGA_INDEX_DATA)", 1);
+    if (walk_up(env.cwd, g.data_file, found)) return found;
+    if (walk_up(env.exe_dir, g.data_file, found)) return found;
+    throw CliError(std::string("data file not found (use --data or ") + g.data_env + ")", 1);
 }
 
 std::vector<Draw> parse_draws(const std::string& text, const Game& g) {

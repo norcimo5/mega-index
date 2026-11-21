@@ -20,7 +20,8 @@ usage:
   mega-index --help
 
 games: megamillions (default; 5 of 1-70 + Mega Ball 1-24), powerball (5 of 1-69 + Powerball 1-26)
-data:  --data PATH, else $MEGA_INDEX_DATA, else data/draws.csv found walking up from cwd, then from the program dir
+data:  --data PATH, else $MEGA_INDEX_DATA (megamillions) / $POWER_INDEX_DATA (powerball), else
+       data/draws.csv (data/powerball-draws.csv) found walking up from cwd, then from the program dir
 ";
 
 pub struct Outcome {
@@ -108,13 +109,6 @@ fn get_game(opts: &Opts) -> Result<Game> {
     Game::by_id(id).ok_or_else(|| CliError::usage(format!("unknown game '{}'", id)))
 }
 
-fn need_history(g: &Game) -> Result<()> {
-    if !g.has_history {
-        return Err(CliError::usage(format!("no draw history for {}", g.name)));
-    }
-    Ok(())
-}
-
 fn ticket_lines(out: &mut String, g: &Game, whites: &[u64], bonus: u64, index: u64) {
     out.push_str(&format!("game: {}\nticket: {}\nindex: {}\n", g.name, fmt_ticket(g, whites, bonus), index));
 }
@@ -178,8 +172,7 @@ fn cmd_pick(argv: &[String], out: &mut String) -> Result<()> {
         }
     }
     let st = if mode != Mode::Uniform {
-        need_history(&g)?;
-        let path = find_data(get(&opts, "data"))?;
+        let path = find_data(&g, get(&opts, "data"))?;
         Some(Stats::new(&g, &load_draws(&path, &g)?))
     } else {
         None
@@ -213,8 +206,7 @@ fn load_stats(argv: &[String]) -> Result<Stats> {
         return Err(CliError::usage(format!("unexpected argument '{}'", p)));
     }
     let g = get_game(&opts)?;
-    need_history(&g)?;
-    let path = find_data(get(&opts, "data"))?;
+    let path = find_data(&g, get(&opts, "data"))?;
     Ok(Stats::new(&g, &load_draws(&path, &g)?))
 }
 

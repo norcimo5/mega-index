@@ -14,20 +14,20 @@ u64 binom(int n, int k) {
 }
 
 Game::Game(const char* id_, const char* name_, int wc, int wm, int bm, const char* bn,
-           const char* ba, const char* ms, bool hist)
+           const char* ba, const char* ms, const char* df, const char* de)
     : id(id_), name(name_), white_count(wc), white_max(wm), bonus_count(1), bonus_max(bm),
-      bonus_name(bn), bonus_abbr(ba), matrix_start(ms), has_history(hist),
+      bonus_name(bn), bonus_abbr(ba), matrix_start(ms), data_file(df), data_env(de),
       white_combos(binom(wm, wc)), total(binom(wm, wc) * static_cast<u64>(bm)) {}
 
 const Game& mega_millions() {
     static const Game g("megamillions", "Mega Millions", 5, 70, 24, "Mega Ball", "MB",
-                        "2025-04-08", true);
+                        "2025-04-08", "draws.csv", "MEGA_INDEX_DATA");
     return g;
 }
 
 const Game& powerball() {
     static const Game g("powerball", "Powerball", 5, 69, 26, "Powerball", "PB", "2015-10-07",
-                        false);
+                        "powerball-draws.csv", "POWER_INDEX_DATA");
     return g;
 }
 

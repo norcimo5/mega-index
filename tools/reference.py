@@ -15,7 +15,7 @@ from math import comb
 
 class Game:
     def __init__(self, gid, name, white_count, white_max, bonus_max, bonus_name,
-                 bonus_abbr, matrix_start, has_history):
+                 bonus_abbr, matrix_start, data_file, data_env):
         self.id = gid
         self.name = name
         self.white_count = white_count
@@ -25,13 +25,16 @@ class Game:
         self.bonus_name = bonus_name
         self.bonus_abbr = bonus_abbr
         self.matrix_start = matrix_start
-        self.has_history = has_history
+        self.data_file = data_file      # looked up as <dir>/data/<data_file>
+        self.data_env = data_env        # env var naming this game's data file
         self.white_combos = comb(white_max, white_count)
         self.total = self.white_combos * bonus_max
 
 
-MEGA_MILLIONS = Game("megamillions", "Mega Millions", 5, 70, 24, "Mega Ball", "MB", "2025-04-08", True)
-POWERBALL = Game("powerball", "Powerball", 5, 69, 26, "Powerball", "PB", "2015-10-07", False)
+MEGA_MILLIONS = Game("megamillions", "Mega Millions", 5, 70, 24, "Mega Ball", "MB", "2025-04-08",
+                     "draws.csv", "MEGA_INDEX_DATA")
+POWERBALL = Game("powerball", "Powerball", 5, 69, 26, "Powerball", "PB", "2015-10-07",
+                 "powerball-draws.csv", "POWER_INDEX_DATA")
 GAMES = {"megamillions": MEGA_MILLIONS, "powerball": POWERBALL}
 PLAY_LABELS = "ABCDE"
 MODES = ("uniform", "hot", "cold", "mixed")
@@ -148,10 +151,11 @@ def validate_ticket(g, whites, bonus):
 
 
 # ---------------------------------------------------------------- data
-def find_data(opts):
+def find_data(opts, g):
+    """Per-game data file. Only the selected game's env var is consulted."""
     if "data" in opts:
         return opts["data"]
-    env = os.environ.get("MEGA_INDEX_DATA", "")
+    env = os.environ.get(g.data_env, "")
     if env:
         return env
     starts = []
@@ -163,14 +167,14 @@ def find_data(opts):
     for start in starts:
         d = start
         while True:
-            p = os.path.join(d, "data", "draws.csv")
+            p = os.path.join(d, "data", g.data_file)
             if os.path.isfile(p):
                 return p
             parent = os.path.dirname(d)
             if parent == d:
                 break
             d = parent
-    raise CliError("data file not found (use --data or MEGA_INDEX_DATA)", 1)
+    raise CliError("data file not found (use --data or %s)" % g.data_env, 1)
 
 
 _WS = " \t\r\v\f"                       # the only whitespace allowed around fields
@@ -249,11 +253,6 @@ class Stats:
         if pool == "w":
             return getattr(self, kind)(self.wf, self.wgap, self.whites())
         return getattr(self, kind)(self.bf, self.bgap, self.bonuses())
-
-
-def need_history(g):
-    if not g.has_history:
-        raise CliError("no draw history for %s" % g.name)
 
 
 # ---------------------------------------------------------------- commands
@@ -374,8 +373,7 @@ def cmd_pick(argv):
         raise CliError("export path must end in .csv or .json")
     st = None
     if mode != "uniform":
-        need_history(g)
-        st = Stats(g, load_draws(find_data(opts), g))
+        st = Stats(g, load_draws(find_data(opts, g), g))
     rows, seen = [], set()
     while len(rows) < n:
         w, b, i = make_pick(g, mode, st)
@@ -399,8 +397,7 @@ def load_stats(argv):
     if pos:
         raise CliError("unexpected argument '%s'" % pos[0])
     g = get_game(opts)
-    need_history(g)
-    return Stats(g, load_draws(find_data(opts), g))
+    return Stats(g, load_draws(find_data(opts, g), g))
 
 
 def table(f, gap, nums, D, k, K):
@@ -477,12 +474,14 @@ usage:
   mega-index encode <w1> <w2> <w3> <w4> <w5> --bonus N [--game G]   (--mb N also accepted)
   mega-index decode <index> [--game G]
   mega-index pick [-n 1..5] [--mode uniform|hot|cold|mixed] [--game G] [--export FILE.csv|FILE.json] [--data PATH]
-  mega-index stats [--data PATH]
-  mega-index guess [--data PATH]
+  mega-index stats [--data PATH] [--game G]
+  mega-index guess [--data PATH] [--game G]
   mega-index --help
 
 games: megamillions (default; 5 of 1-70 + Mega Ball 1-24), powerball (5 of 1-69 + Powerball 1-26)
-data:  --data PATH, else $MEGA_INDEX_DATA, else data/draws.csv found walking up from cwd, then from the program dir
+data:  --data PATH, else $MEGA_INDEX_DATA (megamillions) / $POWER_INDEX_DATA (powerball),
+       else data/draws.csv (megamillions) / data/powerball-draws.csv (powerball)
+       found walking up from cwd, then from the program dir
 """
 
 COMMANDS = {"encode": cmd_encode, "decode": cmd_decode, "pick": cmd_pick,

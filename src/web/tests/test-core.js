@@ -70,7 +70,7 @@ function validTicket(g, t) {
   }
   return t.bonus >= 1 && t.bonus <= g.bonus_max;
 }
-[[MM, 120000], [PB, 20000]].forEach(function (gc) {
+[[MM, 120000], [PB, 100000]].forEach(function (gc) {
   var g = gc[0], bad = 0;
   for (var i = 0; i < gc[1]; i++) {
     var idx = M.randbelow(g.total), t = M.decode(g, idx);
@@ -108,7 +108,7 @@ eq(M.parseIndexText(MM, "290472336"), { error: "index 290472336 out of range 0-2
 throwsMsg(function () { M.getGame("lotto"); }, "unknown game 'lotto'", "unknown game");
 throwsMsg(function () { M.makeSlip(MM, 6, "uniform"); }, "plays must be 1-5", "plays range");
 throwsMsg(function () { M.makePick(MM, "lucky"); }, "unknown mode 'lucky'", "mode");
-throwsMsg(function () { M.makePick(PB, "hot", null); }, "no draw history for Powerball", "PB hot");
+throwsMsg(function () { M.makePick(PB, "hot", null); }, "stats required for mode hot", "PB hot needs stats");
 
 section("randbelow");
 (function () {
@@ -161,6 +161,51 @@ eq(gt.map(function (t) { return t.index; }), [43748603, 215053886, 256609788], "
   if (fs.existsSync(csvPath)) eq(webDraws, M.parseDrawsCsv(MM, fs.readFileSync(csvPath, "utf8")), "draws-data.js == data/draws.csv");
 })();
 
+section("Powerball golden stats + guess (tests/golden/powerball-draws.csv)");
+(function () {
+  var csv = path.join(GOLD, "powerball-draws.csv"), sf = path.join(GOLD, "pb_stats.txt"), gf = path.join(GOLD, "pb_guess.txt");
+  if (!fs.existsSync(csv) || !fs.existsSync(sf) || !fs.existsSync(gf)) {
+    console.log("   SKIP: Powerball goldens missing (need powerball-draws.csv, pb_stats.txt, pb_guess.txt)");
+    return;
+  }
+  var pd = M.parseDrawsCsv(PB, fs.readFileSync(csv, "utf8"));
+  var ps = M.computeStats(PB, pd);
+  var txt = fs.readFileSync(sf, "utf8").split("\n");
+  ok(txt[0] === "POWERBALL STATS", "pb_stats header");
+  ok(txt.indexOf("draws: " + ps.D) >= 0, "pb draws line (" + ps.D + ")");
+  ok(txt.indexOf("range: " + ps.first + ".." + ps.last) >= 0, "pb range line");
+  ok(txt.indexOf("expected white freq: " + ps.expWText) >= 0, "pb expected white = N*5/69 (" + ps.expWText + ")");
+  ok(txt.indexOf("expected PB freq: " + ps.expBText) >= 0, "pb expected PB = N/26 (" + ps.expBText + ")");
+  eq([ps.whites.length, ps.bonuses.length, ps.dfW, ps.dfB], [69, 26, 68, 25], "pb ranges + df");
+  M.statsSummaryLines(ps).forEach(function (line) { ok(txt.indexOf(line) >= 0, "pb_stats.txt has: " + line); });
+  var t2 = [];
+  ps.whites.forEach(function (n) { t2.push(fmtRow(n, ps.wf[n], ps.devW(n), ps.wgap[n])); });
+  ps.bonuses.forEach(function (n) { t2.push(fmtRow(n, ps.bf[n], ps.devB(n), ps.bgap[n])); });
+  eq(t2, txt.filter(function (l) { return /^\d\d  /.test(l); }), "pb per-number tables match pb_stats.txt");
+  eq(M.guessLines(ps), fs.readFileSync(gf, "utf8").replace(/\n$/, "").split("\n"), "pb guess lines == pb_guess.txt");
+  var g3 = M.guessTickets(ps);
+  eq(g3.map(function (t) { return M.fmtTicket(PB, t.whites, t.bonus) + " " + t.index; }),
+    ["21 23 28 61 64 PB 14 195511121", "13 26 34 46 49 PB 16 48543757", "21 27 61 63 64 PB 26 198152707"], "pb guess tickets");
+  ["uniform", "hot", "cold", "mixed"].forEach(function (mode) {
+    var good = true;
+    for (var i = 0; i < 200; i++) M.makeSlip(PB, 5, mode, ps).forEach(function (p) {
+      if (!validTicket(PB, p) || M.encode(PB, p.whites, p.bonus) !== p.index) good = false;
+    });
+    ok(good, "pb makeSlip mode=" + mode);
+  });
+})();
+(function () {
+  var f = path.join(__dirname, "..", "power", "js", "draws-data.js");
+  if (!fs.existsSync(f)) { console.log("   SKIP: src/web/power/js/draws-data.js not generated yet"); return; }
+  var sb = {};
+  new Function("window", fs.readFileSync(f, "utf8"))(sb);
+  var pw = M.normalizeDraws(PB, sb.PB_DRAWS);
+  ok(pw.length > 1000 && pw[0].d === "2015-10-07" && typeof sb.PB_DRAWS_UPDATED === "string", "power draws-data.js loads (" + pw.length + ")");
+  ok(M.computeStats(PB, pw).D === pw.length, "power data computes stats");
+  var c = path.join(ROOT, "data", "powerball-draws.csv");
+  if (fs.existsSync(c)) eq(pw, M.parseDrawsCsv(PB, fs.readFileSync(c, "utf8")), "power draws-data.js == data/powerball-draws.csv");
+})();
+
 section("weighted modes");
 (function () {
   // deterministic rb: always 0 -> first number in ascending order each round
@@ -203,6 +248,11 @@ section("export format (SPEC section 9)");
     '  {"play": "A", "mode": "uniform", "w1": 3, "w2": 21, "w3": 43, "w4": 49, "w5": 57, "bonus": 14, "index": 96625645, "game": "megamillions", "generated_at": "2026-11-20T22:36:10Z"},\n' +
     '  {"play": "B", "mode": "hot", "w1": 7, "w2": 19, "w3": 33, "w4": 48, "w5": 62, "bonus": 11, "index": 147183154, "game": "megamillions", "generated_at": "2026-11-20T22:36:10Z"}\n' +
     "]\n", "JSON");
+  ok(M.exportCsv(PB, plays.slice(0, 1), stamp).split("\n")[1] === "A,uniform,3,21,43,49,57,14,96625645,powerball,2026-11-20T22:36:10Z", "CSV game field powerball");
+  ok(M.exportJson(PB, plays.slice(0, 1), stamp).indexOf('"game": "powerball"') > 0, "JSON game field powerball");
+  eq(M.fmtTicket(PB, [62, 7, 48, 19, 33], 11), "07 19 33 48 62 PB 11", "PB ticket format");
+  eq(M.validateTicket(PB, [1, 2, 3, 4, 70], 1), "white ball 70 out of range 1-69", "PB white range");
+  eq(M.parseIndexText(PB, "292201338"), { error: "index 292201338 out of range 0-292201337" }, "PB parseIndexText range");
   eq(M.utcStamp(new Date(Date.UTC(2026, 10, 20, 22, 36, 10, 123))), "2026-11-20T22:36:10Z", "utcStamp");
   ok(/^[0-9A-Za-z-]+$/.test(M.fileStamp(stamp)), "fileStamp is filename-safe: " + M.fileStamp(stamp));
   eq(M.fmt2(-5, 10, true), "-0.50", "fmt2 half away from zero (neg)");

@@ -8,7 +8,7 @@ from .errors import CliError
 from .export import check_export_path, export, utc_stamp
 from .game import DEFAULT_GAME, GAMES
 from .picks import MODES, PLAY_LABELS, guess_tickets, make_slip
-from .stats import Stats, find_data, load_draws, need_history
+from .stats import Stats, find_data, load_draws
 
 # fullmatch, not "$": "$" would also accept a token with a trailing newline ("5\n").
 _INT_RE = re.compile(r"[0-9]{1,18}")
@@ -24,7 +24,7 @@ usage:
   mega-index --help
 
 games: megamillions (default; 5 of 1-70 + Mega Ball 1-24), powerball (5 of 1-69 + Powerball 1-26)
-data:  --data PATH, else $MEGA_INDEX_DATA, else data/draws.csv found walking up from cwd, then from the program dir
+data:  --data PATH, else $MEGA_INDEX_DATA / $POWER_INDEX_DATA (per game), else data/draws.csv / data/powerball-draws.csv found walking up from cwd, then from the program dir
 """
 
 
@@ -40,8 +40,8 @@ class Context:
     def out(self, s=""):
         (self.stdout or sys.stdout).write(s + "\n")
 
-    def data_path(self, opts):
-        return find_data(opts.get("data"), self.cwd, self.script_dir, self.environ)
+    def data_path(self, opts, g):
+        return find_data(opts.get("data"), self.cwd, self.script_dir, self.environ, g)
 
 
 def parse_int(tok):
@@ -84,8 +84,7 @@ def load_stats(ctx, argv):
     if pos:
         raise CliError("unexpected argument '%s'" % pos[0])
     g = get_game(opts)
-    need_history(g)
-    return Stats(g, load_draws(ctx.data_path(opts), g))
+    return Stats(g, load_draws(ctx.data_path(opts, g), g))
 
 
 def cmd_encode(ctx, argv):
@@ -130,8 +129,7 @@ def cmd_pick(ctx, argv):
         check_export_path(path)
     st = None
     if mode != "uniform":
-        need_history(g)
-        st = Stats(g, load_draws(ctx.data_path(opts), g))
+            st = Stats(g, load_draws(ctx.data_path(opts, g), g))
     rows = make_slip(g, mode, n, st)
     ctx.out("%s PICK  mode=%s  plays=%d" % (g.name.upper(), mode, n))
     for label, w, b, i in rows:

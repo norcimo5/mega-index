@@ -2,8 +2,8 @@ name: Refresh draw data
 
 on:
   schedule:
-    # Wednesday and Saturday 09:00 UTC (draws are Tuesday and Friday nights)
-    - cron: "0 9 * * 3,6"
+    # Morning after every draw, 09:00 UTC: Powerball Mon/Wed/Sat, Mega Millions Tue/Fri
+    - cron: "0 9 * * 0,2,3,4,6"
   workflow_dispatch:
 
 permissions:
@@ -19,23 +19,25 @@ jobs:
         with:
           python-version: "3.12"
       - name: Download and rebuild data files
-        run: python3 tools/refresh_data.py
+        run: python3 tools/refresh_data.py --game all
       - name: Commit and push if changed
         id: commit
         run: |
-          # draws-data.js embeds a generation timestamp, so compare draws.csv only
-          if git diff --quiet -- data/draws.csv; then
+          # draws-data.js embeds a generation timestamp, so compare the canonical CSVs only
+          if git diff --quiet -- data/draws.csv data/powerball-draws.csv; then
             echo "No new draws."
-            git checkout -- src/web/js/draws-data.js data/ 2>/dev/null || true
+            git checkout -- data/ src/web/js/draws-data.js src/web/power/js/draws-data.js 2>/dev/null || true
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # TODO: src/web/sw.js cache version must change for installed PWAs to
-          # pick up new data; check how sw.js derives it (MM_DRAWS_UPDATED?).
+          # Both service workers key their cache on the data timestamp and draw count
+          # (via importScripts of draws-data.js), so no manual SW version bump is needed.
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/draws.csv src/web/js/draws-data.js
-          git commit -m "data: refresh Mega Millions draws"
+          git add data/draws.csv data/powerball-draws.csv \
+            data/mega-millions-ny-opendata-raw.csv data/powerball-ny-opendata-raw.csv \
+            src/web/js/draws-data.js src/web/power/js/draws-data.js
+          git commit -m "data: refresh Mega Millions and Powerball draws"
           git push
           echo "changed=true" >> "$GITHUB_OUTPUT"
       - name: Trigger Pages deploy

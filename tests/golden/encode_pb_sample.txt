@@ -1,0 +1,3 @@
+game: Powerball
+ticket: 07 19 33 48 62 PB 11
+index: 159448416

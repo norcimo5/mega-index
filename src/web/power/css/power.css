@@ -1,0 +1,96 @@
+/* POWER//INDEX theme: loaded after ../css/app.css and only re-points its tokens (plus a few rules
+ * whose MEGA colors cannot work on red). Rose background + red grid so it never looks like MEGA. */
+:root {
+  --bg: #fff0f2;
+  --bg-2: #ffe9ed;
+  --ink: #1a0710;
+  --ink-2: #4a2633;
+  --ink-3: #774654;
+  --line: #f1c4cd;
+  --line-2: #e096a6;
+  --blue: #e0102f;        /* primary accent: Powerball red */
+  --blue-ink: #b0001e;
+  --blue-soft: #ffe0e6;
+  --cyan: #00d6ff;
+  --cyan-ink: #006f8c;
+  --cyan-soft: #dcf8ff;
+  --magenta: #ff7a00;     /* "hot": ember orange, distinct from the red Powerball */
+  --magenta-ink: #b04600;
+  --magenta-soft: #ffe8d4;
+  --gold: #e0102f;        /* bonus ball = the red Powerball */
+  --gold-hi: #ff8a9b;
+  --gold-lo: #780013;
+  --gold-ink: #8a0018;
+  --red-ink: #9e0018;
+
+  --grid-line: rgba(224, 16, 47, .075);
+  --glow-a: rgba(0, 214, 255, .10);
+  --glow-b: rgba(224, 16, 47, .12);
+  --scan: rgba(26, 7, 16, .03);
+  --bar-bg: rgba(255, 240, 242, .93);
+  --tabbar-bg: rgba(255, 243, 245, .96);
+  --glitch-a: rgba(224, 16, 47, .8);
+  --glitch-b: rgba(0, 214, 255, .85);
+  --glitch-before: #e0102f;
+  --glitch-after: #00a6cf;
+  --brand-glow: rgba(224, 16, 47, .5);
+  --panel-a: rgba(255, 255, 255, .97);
+  --panel-b: rgba(255, 250, 251, .97);
+  --notch: #fff;
+  --pri-hi: #ff2d4b; --pri-lo: #a8001c; --pri-hi2: #ff4560; --pri-lo2: #c00020;
+  --busy-a: #e0102f; --busy-b: #a0001a;
+  --inst-glow: rgba(0, 214, 255, .5);
+  --inst-hi: #34202a; --inst-lo: #0e0308; --inst-hi2: #462a37; --inst-lo2: #1a0710;
+  --wball-mid: #f8eef0; --wball-edge: #e3c3ca;
+  --mb-ink: #fff;
+  --mb-shade: rgba(90, 0, 12, .32);
+  --mb-ring: rgba(224, 16, 47, .2);
+  --mb-glow: rgba(224, 16, 47, .5);
+  --mb-glow-2: rgba(224, 16, 47, .6);
+  --mb-border: #ee9aa8;
+  --mb-chip: #ffe3e8;
+  --mb-chip-2: #ffdbe2;
+  --mb-on-dark: #ff5c74;
+  --play-tint: rgba(224, 16, 47, .05);
+  --bal-tint: rgba(224, 16, 47, .09);
+  --note-a: rgba(26, 7, 16, .05); --note-b: rgba(26, 7, 16, .015); --note-bg: #fffafb;
+  --note-line: #e7a5b1; --note-bar: #e0102f; --note-ink: #a8001c;
+  --empty-slot: #fbecef;
+  --detail-ink: #ffeef1; --detail-dim: #d9a8b4; --detail-pos: #ffad5c; --detail-neg: #6fe6ff;
+  --heat-scale: linear-gradient(90deg, #00a6cf, #8ee9ff, #ffffff, #ffc08a, #f06400);
+  --chart-n-legend: #e9c2ca;
+  --chart-o-legend: #1a0710;
+
+  /* charts.js + heatmap (read at draw time) */
+  --chart-h: #ff7a00;
+  --chart-c: #00c2ea;
+  --chart-n: #e9c2ca;
+  --chart-g: #e0102f;
+  --chart-o: #1a0710;
+  --chart-grid: #f6d3da;
+  --chart-axis: #1a0710;
+  --chart-label: #774654;
+  --chart-halo: #fff;
+  --chart-cursor: #00a6cf;
+  --heat-cold: #00a6cf;
+  --heat-base: #ffffff;
+  --heat-hot: #f06400;
+  --heat-ink: #1a0710;
+}
+
+/* the bonus tag sits on red, so its text goes white */
+.ph-gold { color: #fff; }
+.seg button[aria-checked="true"], .seg button[aria-selected="true"] { box-shadow: inset 0 -3px 0 var(--blue); }
+.num[aria-pressed="true"] { box-shadow: inset 0 -3px 0 var(--blue); }
+.btn-install::before { background: linear-gradient(110deg, var(--blue), var(--cyan)); }
+.top::after { background: linear-gradient(90deg, var(--cyan), var(--blue) 40%, var(--blue-ink) 75%, transparent); }
+.tabbar::before { background: linear-gradient(90deg, transparent, var(--cyan) 20%, var(--blue) 50%, var(--cyan) 80%, transparent); }
+.tab[aria-current="page"] svg { filter: drop-shadow(0 0 4px rgba(224, 16, 47, .55)); }
+.tab[aria-current="page"]::before { box-shadow: 0 0 10px rgba(224, 16, 47, .7); }
+.hud::before { background: linear-gradient(135deg, var(--blue) 0, var(--line-2) 18%, var(--line-2) 82%, var(--cyan) 100%); }
+.chip.mb { color: var(--gold-ink); }
+
+/* "POWER//INDEX" is one glyph wider than "MEGA//INDEX": keep it clear of INSTALL at 360px */
+@media (max-width: 719px) {
+  h1.glitch { font-size: 22.5px; letter-spacing: 0; }
+}

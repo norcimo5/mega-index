@@ -74,6 +74,34 @@ class TestReference(unittest.TestCase):
         self.assertEqual(R.fmt2(-1, 1000, True), "+0.00")
         self.assertEqual(R.fmt2(845, 70, False), "12.07")
 
+    def test_powerball_history(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        fx = os.path.join(root, "tests", "golden", "powerball-draws.csv")
+        st = R.Stats(PB, LOAD(fx, PB))
+        self.assertEqual(st.draws[0][0], "2015-10-07")
+        self.assertEqual(sum(st.wf), 5 * st.D)
+        self.assertEqual(sum(st.bf), st.D)
+        for _, w, b, i in R.guess_tickets(st):
+            self.assertEqual(R.decode(PB, i), (w, b))
+        with self.assertRaises(CliError):  # MM file has white 70, invalid for Powerball
+            LOAD(os.path.join(root, "tests", "golden", "draws.csv"), PB)
+
+    def test_find_data_per_game(self):
+        old = {k: os.environ.get(k) for k in ("MEGA_INDEX_DATA", "POWER_INDEX_DATA")}
+        try:
+            os.environ["MEGA_INDEX_DATA"], os.environ["POWER_INDEX_DATA"] = "mm.csv", "pb.csv"
+            self.assertEqual(R.find_data({}, MM), "mm.csv")
+            self.assertEqual(R.find_data({}, PB), "pb.csv")
+            self.assertEqual(R.find_data({"data": "x.csv"}, PB), "x.csv")
+            del os.environ["POWER_INDEX_DATA"]
+            self.assertTrue(R.find_data({}, PB).endswith(os.path.join("data", "powerball-draws.csv")))
+        finally:
+            for k, v in old.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
 
 if __name__ == "__main__":
     unittest.main()

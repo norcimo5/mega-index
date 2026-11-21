@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Regenerate tests/golden/ from tools/reference.py (the oracle).
 
-Golden stats/guess use the frozen fixture tests/golden/draws.csv (a snapshot of
-data/draws.csv), so refreshing data/ does not break golden tests.
-Usage: python3 tools/make_golden.py [--refresh-fixture]
+Golden stats/guess use frozen fixtures, so refreshing data/ does not break golden tests:
+  tests/golden/draws.csv            snapshot of data/draws.csv (Mega Millions)
+  tests/golden/powerball-draws.csv  snapshot of data/powerball-draws.csv (Powerball)
+Usage: python3 tools/make_golden.py [--refresh-fixture] [--refresh-pb-fixture]
+  --refresh-fixture     re-snapshot BOTH fixtures from data/
+  --refresh-pb-fixture  re-snapshot only the Powerball fixture
 """
 import os
 import shutil
@@ -16,7 +19,7 @@ REF = [sys.executable, os.path.join(ROOT, "tools", "reference.py")]
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import reference as R  # noqa: E402
 
-# name, args (FIXTURE is replaced by the fixture path relative to repo root)
+# name, args (FIXTURE / PBFIXTURE are replaced by the fixture paths relative to repo root)
 CASES = [
     ("encode_147183154", "encode 7 19 33 48 62 --bonus 11"),
     ("encode_200000000", "encode 8 24 37 38 66 --bonus 9"),
@@ -47,8 +50,6 @@ CASES = [
     ("err_mode", "pick --mode lucky"),
     ("err_game", "pick --game keno"),
     ("err_export_ext", "pick --export picks.txt"),
-    ("err_pb_hot", "pick --mode hot --game powerball"),
-    ("err_pb_stats", "stats --game powerball"),
     ("err_unknown_cmd", "frobnicate"),
     ("err_unknown_opt", "encode 1 2 3 4 5 --bonus 1 --wat"),
     ("err_data_missing", "stats --data tests/golden/no-such-file.csv"),
@@ -59,6 +60,12 @@ CASES = [
     ("err_data_underscore", "stats --data tests/golden/bad_underscore.csv"),
     ("err_data_nel", "stats --data tests/golden/bad_nel.csv"),
     ("err_data_header_nbsp", "stats --data tests/golden/bad_header.csv"),
+    ("encode_pb_sample", "encode 7 19 33 48 62 --bonus 11 --game powerball"),
+    ("pb_stats", "stats --game powerball --data PBFIXTURE"),
+    ("pb_guess", "guess --game powerball --data PBFIXTURE"),
+    ("err_pb_wrong_data", "stats --game powerball --data FIXTURE"),
+    ("err_mm_wrong_data", "guess --data PBFIXTURE"),
+    ("err_pb_data_missing", "guess --game powerball --data tests/golden/no-such-file.csv"),
 ]
 
 
@@ -86,12 +93,15 @@ def write_data_fixtures():
 def main():
     if "--refresh-fixture" in sys.argv:
         shutil.copy(os.path.join(ROOT, "data", "draws.csv"), os.path.join(G, "draws.csv"))
+    if "--refresh-fixture" in sys.argv or "--refresh-pb-fixture" in sys.argv:
+        shutil.copy(os.path.join(ROOT, "data", "powerball-draws.csv"), os.path.join(G, "powerball-draws.csv"))
     write_data_fixtures()
     for f in os.listdir(G):
         if f.endswith((".txt", ".err")) or f == "cases.tsv":
             os.remove(os.path.join(G, f))
     rows = []
     for name, args in CASES:
+        args = args.replace("PBFIXTURE", "tests/golden/powerball-draws.csv")
         args = args.replace("FIXTURE", "tests/golden/draws.csv")
         p = subprocess.run(REF + args.split(), cwd=ROOT, capture_output=True, text=True)
         with open(os.path.join(G, name + ".txt"), "w", newline="\n") as fh:

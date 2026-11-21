@@ -1,8 +1,19 @@
-/* MEGA//INDEX UI. Classic script; depends on window.MegaIndex (core.js), window.MegaCharts, window.MM_DRAWS. */
+/* MEGA//INDEX + POWER//INDEX UI. Classic script; depends on window.MegaIndex (core.js), window.MegaCharts
+ * and the draw-data global. The page picks the game with window.APP_GAME ("megamillions" when unset,
+ * "powerball" for power/index.html); everything game-specific below comes from APP and G. */
 (function () {
   "use strict";
   var M = window.MegaIndex, C = window.MegaCharts;
-  var G = M.MEGA_MILLIONS;
+  var APPS = {
+    megamillions: { brand: "MEGA//INDEX", slug: "mega-index", data: "MM_DRAWS",
+      vectors: [147183154, 200000000, 0, 290472335], source: "NY State Open Data" },
+    powerball: { brand: "POWER//INDEX", slug: "power-index", data: "PB_DRAWS",
+      vectors: [146100669, 200000000, 0, 292201337], source: "NY State Open Data", evenTicks: true }
+  };
+  var GAME_ID = Object.prototype.hasOwnProperty.call(APPS, window.APP_GAME) ? window.APP_GAME : "megamillions";
+  var APP = APPS[GAME_ID];
+  var G = M.getGame(GAME_ID);
+  var BN = G.bonus_name, BA = G.bonus_abbr, BNU = BN.toUpperCase();
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
   var IS_HTTP = /^https?:$/.test(location.protocol);
@@ -15,15 +26,16 @@
     },
     set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode etc. */ } }
   };
-  var K_PREF = "mega-index.prefs.v1", K_HIST = "mega-index.history.v1";
+  /* localStorage is shared by every app on the origin, so each app keeps its own keys */
+  var K_PREF = APP.slug + ".prefs.v1", K_HIST = APP.slug + ".history.v1";
 
   /* ------------------------------------------------------------ data */
   var draws = null, st = null, dataError = null;
   try {
-    draws = M.normalizeDraws(G, window.MM_DRAWS || []);
+    draws = M.normalizeDraws(G, window[APP.data] || []);
     st = M.computeStats(G, draws);
   } catch (e) { dataError = e.message; }
-  var UPDATED = window.MM_DRAWS_UPDATED || "";
+  var UPDATED = window[APP.data + "_UPDATED"] || "";
 
   /* ------------------------------------------------------------ helpers */
   function h(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
@@ -35,7 +47,6 @@
       if (navigator.vibrate && (!ua || ua.hasBeenActive)) navigator.vibrate(p);
     } catch (e) { /* ignore */ }
   }
-  function rnd2() { return pad2(M.randbelow(70) + 1); }
 
   var toastTimer = null;
   function toast(msg) {
@@ -75,7 +86,7 @@
   function exportPlays(plays, fmt) {
     if (!plays.length) { toast("NOTHING TO EXPORT"); return; }
     var stamp = M.utcStamp();
-    var name = "mega-index-picks-" + M.fileStamp(stamp) + "." + fmt;
+    var name = APP.slug + "-picks-" + M.fileStamp(stamp) + "." + fmt;
     if (fmt === "csv") download(name, M.exportCsv(G, plays, stamp), "text/csv");
     else download(name, M.exportJson(G, plays, stamp), "application/json");
   }
@@ -90,11 +101,11 @@
   var canShare = !!(navigator.share && IS_HTTP);
   function sharePlays(plays, withLabels) {
     if (!plays.length) { toast("NOTHING TO SHARE"); return; }
-    var text = "MEGA//INDEX\n" + slipText(plays, withLabels);
+    var text = APP.brand + "\n" + slipText(plays, withLabels);
     var stamp = M.utcStamp();
-    var data = { title: "MEGA//INDEX picks", text: text };
+    var data = { title: APP.brand + " picks", text: text };
     try {
-      var file = new File([M.exportCsv(G, plays, stamp)], "mega-index-picks-" + M.fileStamp(stamp) + ".csv", { type: "text/csv" });
+      var file = new File([M.exportCsv(G, plays, stamp)], APP.slug + "-picks-" + M.fileStamp(stamp) + ".csv", { type: "text/csv" });
       if (navigator.canShare && navigator.canShare({ files: [file] })) data.files = [file];
     } catch (e) { /* File ctor unsupported */ }
     navigator.share(data).catch(function (e) {
@@ -110,7 +121,7 @@
     if (size) b.style.setProperty("--s", size + "px");
     var s = h("span", "n"); s.textContent = n == null ? "--" : pad2(n);
     b.appendChild(s);
-    b.setAttribute("aria-label", (mb ? "Mega Ball " : "") + (n == null ? "empty" : n));
+    b.setAttribute("aria-label", (mb ? BN + " " : "") + (n == null ? "empty" : n));
     return b;
   }
   function ticketBalls(whites, bonus, size) {
@@ -167,10 +178,10 @@
   if (!st && state.mode !== "uniform") state.mode = "uniform";
 
   var MODE_DESC = {
-    uniform: "Crypto-uniform index over all 290,472,336 tickets, decoded to a ticket. The fair default.",
+    uniform: "Crypto-uniform index over all " + grp(G.total) + " tickets, decoded to a ticket. The fair default.",
     hot: "Weighted toward often-drawn numbers (weight = freq + 1), no repeats. For fun only.",
     cold: "Weighted toward rarely-drawn numbers (weight = max - freq + 1). For fun only.",
-    mixed: "3 hot-weighted whites + 2 cold-weighted whites; Mega Ball coin-flips hot/cold. For fun only."
+    mixed: "3 hot-weighted whites + 2 cold-weighted whites; " + BN + " coin-flips hot/cold. For fun only."
   };
 
   function setSeg(seg, v) {
@@ -305,7 +316,7 @@
       li.appendChild(head);
       e.plays.forEach(function (p) {
         var line = h("div", "log-line");
-        line.innerHTML = p.play + ": " + p.whites.map(pad2).join(" ") + ' <span class="mbx">MB ' + pad2(p.bonus) + "</span> <i>#" + p.index + " " + p.mode + "</i>";
+        line.innerHTML = p.play + ": " + p.whites.map(pad2).join(" ") + ' <span class="mbx">' + BA + " " + pad2(p.bonus) + "</span> <i>#" + p.index + " " + p.mode + "</i>";
         li.appendChild(line);
       });
       ol.appendChild(li);
@@ -323,7 +334,7 @@
     var b = h("button", "num");
     b.type = "button"; b.textContent = pad2(n);
     b.setAttribute("aria-pressed", "false");
-    b.setAttribute("aria-label", (mb ? "Mega Ball " : "White ball ") + n);
+    b.setAttribute("aria-label", (mb ? BN + " " : "White ball ") + n);
     b.addEventListener("click", function () { mb ? toggleMB(n, b) : toggleW(n, b); });
     return b;
   }
@@ -379,7 +390,7 @@
       idxEl.textContent = "—";
       var need = [];
       if (ws.length < 5) need.push((5 - ws.length) + " MORE WHITE" + (5 - ws.length > 1 ? "S" : ""));
-      if (enc.mb == null) need.push("1 MEGA BALL");
+      if (enc.mb == null) need.push("1 " + BNU);
       setEncMsg("NEED " + need.join(" + "), "");
     }
   }
@@ -388,7 +399,7 @@
   function decodeTrace(index) {
     var N = Math.floor(index / G.bonus_max), b = index % G.bonus_max + 1;
     var lines = ['<span class="k">I</span> = ' + index,
-      '<span class="k">N</span> = I div 24 = ' + N + "   <span class=\"k\">MB</span> = I mod 24 + 1 = " + b];
+      '<span class="k">N</span> = I div ' + G.bonus_max + " = " + N + "   <span class=\"k\">" + BA + "</span> = I mod " + G.bonus_max + " + 1 = " + b];
     var x = G.white_max - 1, n = N;
     for (var i = G.white_count; i >= 1; i--) {
       while (M.comb(x, i) > n) x--;
@@ -423,7 +434,7 @@
   }
   function buildVectors() {
     var v = $("#vectors");
-    [[147183154], [200000000], [0], [290472335]].forEach(function (x) {
+    APP.vectors.map(function (i) { return [i]; }).forEach(function (x) {
       var t = M.decode(G, x[0]);
       var b = h("button", "vec");
       b.type = "button";
@@ -474,20 +485,20 @@
     var vals = st.whites.map(function (n) { return wMetric === "gap" ? st.wgap[n] : st.wf[n]; });
     C.barChart($("#chartW"), {
       values: vals, expected: wMetric === "gap" ? null : st.expW, expectedText: st.expWText,
-      kind: whiteKind(wMetric), selected: selW, height: 196, labelEvery: 10,
+      kind: whiteKind(wMetric), selected: selW, height: 196, labelEvery: 10, evenTicks: !!APP.evenTicks,
       title: wMetric === "gap" ? "White balls: draws since last seen" : "White ball frequency vs expected",
       onSelect: function (n) { selectWhite(n, "chart"); }
     });
     $("#wLegend").innerHTML = wMetric === "gap"
-      ? '<span><i class="lh" style="background:#0048ff"></i>TOP-10 OVERDUE</span><span><i class="ln"></i>OTHER</span><span>BAR = DRAWS SINCE LAST SEEN</span>'
+      ? '<span><i class="lh lo"></i>TOP-10 OVERDUE</span><span><i class="ln"></i>OTHER</span><span>BAR = DRAWS SINCE LAST SEEN</span>'
       : '<span><i class="lh"></i>HOT TOP-10</span><span><i class="lc"></i>COLD TOP-10</span><span><i class="ln"></i>OTHER</span><span><i class="le"></i>EXPECTED</span>';
   }
   function drawMBChart() {
     var vals = st.bonuses.map(function (n) { return bMetric === "gap" ? st.bgap[n] : st.bf[n]; });
     C.barChart($("#chartB"), {
       values: vals, expected: bMetric === "gap" ? null : st.expB, expectedText: st.expBText,
-      kind: mbKind(bMetric), selected: selB, height: 170, labelEvery: 4,
-      title: bMetric === "gap" ? "Mega Ball: draws since last seen" : "Mega Ball frequency vs expected",
+      kind: mbKind(bMetric), selected: selB, height: 170, labelEvery: 4, evenTicks: !!APP.evenTicks,
+      title: bMetric === "gap" ? BN + ": draws since last seen" : BN + " frequency vs expected",
       onSelect: function (n) { selectMB(n); }
     });
   }
@@ -497,7 +508,7 @@
     var hot = mb ? st.hotB : st.hotW, cold = mb ? st.coldB : st.coldW, od = mb ? st.overB : st.overW;
     var N = mb ? G.bonus_max : G.white_max;
     return '<div class="dn' + (mb ? " mbn" : "") + '">' + pad2(n) + "</div>" +
-      '<div class="dl">' + (mb ? "MB " : "") + "FREQ <b>" + f + '</b> · DEV <b class="' + (dev[0] === "-" ? "neg" : "pos") + '">' + dev + "</b> vs E " + E + "</div>" +
+      '<div class="dl">' + (mb ? BA + " " : "") + "FREQ <b>" + f + '</b> · DEV <b class="' + (dev[0] === "-" ? "neg" : "pos") + '">' + dev + "</b> vs E " + E + "</div>" +
       '<div class="dl">LAST SEEN <b>' + gap + "</b> draw" + (gap === 1 ? "" : "s") + " ago · " + lastSeen(gap) + "</div>" +
       '<div class="dl">HOT <b>#' + rankPos(hot, n) + "</b> · COLD <b>#" + rankPos(cold, n) + "</b> · OVERDUE <b>#" + rankPos(od, n) + "</b> /" + N + "</div>";
   }
@@ -510,12 +521,22 @@
   }
   function selectMB(n) { selB = n; $("#detailB").innerHTML = detailHtml(n, true); C.select($("#chartB"), n); vibrate(5); }
 
+  // Heatmap ramp: cold -> base -> hot. Themeable with --heat-cold/--heat-base/--heat-hot/--heat-ink
+  // (#rrggbb) on the page; defaults are MEGA//INDEX's cyan / white / magenta.
+  var HEAT = null;
+  function heatTheme() {
+    var cs = window.getComputedStyle ? getComputedStyle(document.documentElement) : null;
+    function v(name, dflt) { var x = cs ? cs.getPropertyValue(name).trim() : ""; return x || dflt; }
+    function rgb(hex) { var m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex); return m ? [1, 2, 3].map(function (i) { return parseInt(m[i], 16); }) : null; }
+    return { cold: rgb(v("--heat-cold", "")) || [0, 166, 207], base: rgb(v("--heat-base", "")) || [255, 255, 255],
+      hot: rgb(v("--heat-hot", "")) || [224, 0, 143], ink: v("--heat-ink", "#0a1230") };
+  }
   function heatColor(dev, maxAbs) {
+    if (!HEAT) HEAT = heatTheme();
     var t = Math.max(-1, Math.min(1, dev / maxAbs));
-    // cold: #00a6cf, neutral: #ffffff, hot: #e0008f
-    var to = t < 0 ? [0, 166, 207] : [224, 0, 143], a = Math.abs(t);
-    var rgb = [255, 255, 255].map(function (c, i) { return Math.round(c + (to[i] - c) * a); });
-    return { bg: "rgb(" + rgb.join(",") + ")", fg: a > 0.55 ? "#fff" : "#0a1230" };
+    var to = t < 0 ? HEAT.cold : HEAT.hot, a = Math.abs(t);
+    var rgb = HEAT.base.map(function (c, i) { return Math.round(c + (to[i] - c) * a); });
+    return { bg: "rgb(" + rgb.join(",") + ")", fg: a > 0.55 ? "#fff" : HEAT.ink };
   }
 
   function chiP(x, k) { // Wilson-Hilferty approximation of the chi-square upper tail
@@ -539,7 +560,7 @@
     var upd = UPDATED ? UPDATED.replace("T", " ").replace(/:\d\dZ$/, " UTC").replace("Z", " UTC") : "unknown";
     $("#kpis").innerHTML =
       '<div class="kpi"><div class="k">DRAWS</div><div class="v">' + st.D + "</div></div>" +
-      '<div class="kpi"><div class="k">EXPECTED FREQ</div><div class="v sm">WHITE ' + st.expWText + "<br>MB&nbsp;&nbsp;&nbsp;&nbsp;" + st.expBText + "</div></div>" +
+      '<div class="kpi"><div class="k">EXPECTED FREQ</div><div class="v sm">WHITE ' + st.expWText + "<br>" + BA + "&nbsp;&nbsp;&nbsp;&nbsp;" + st.expBText + "</div></div>" +
       '<div class="kpi wide"><div class="k">RANGE</div><div class="v sm">' + st.first + " → " + st.last + "</div></div>" +
       '<div class="kpi wide"><div class="k">LAST DRAW · ' + last.d + '</div><div class="v" id="lastDraw"></div></div>' +
       '<div class="kpi wide"><div class="k">DATA UPDATED</div><div class="v sm">' + upd + "</div></div>";
@@ -585,7 +606,7 @@
         '<div class="chi-gauge"><span class="df" style="left:50%"></span><span class="m" style="left:calc(' + pos.toFixed(1) + '% - 1.5px)"></span></div>' +
         '<div class="chi-sub">Dashed = df (what pure chance averages). Far right = suspicious.</div></div>';
     }
-    $("#chi").innerHTML = chiRow("WHITE BALLS", st.chiW, st.chiWText, st.dfW) + chiRow("MEGA BALL", st.chiB, st.chiBText, st.dfB);
+    $("#chi").innerHTML = chiRow("WHITE BALLS", st.chiW, st.chiWText, st.dfW) + chiRow(BNU, st.chiB, st.chiBText, st.dfB);
 
     // rankings
     function chips(list, vals, top, cls, mb) {
@@ -597,7 +618,7 @@
       '<div class="rank-row"><div class="label t-hot">HOT WHITES · NUM:FREQ</div><div class="chips">' + chips(st.hotW, st.wf, 10, "h") + "</div></div>" +
       '<div class="rank-row"><div class="label t-cold">COLD WHITES · NUM:FREQ</div><div class="chips">' + chips(st.coldW, st.wf, 10, "c") + "</div></div>" +
       '<div class="rank-row"><div class="label">OVERDUE WHITES · NUM:GAP</div><div class="chips">' + chips(st.overW, st.wgap, 10, "o") + "</div></div>" +
-      '<div class="rank-row"><div class="label t-bal">MEGA BALL · HOT / COLD / OVERDUE</div><div class="chips">' +
+      '<div class="rank-row"><div class="label t-bal">' + BNU + ' · HOT / COLD / OVERDUE</div><div class="chips">' +
         chips(st.hotB, st.bf, 5, "h", true) + "</div><div class=\"chips\" style=\"margin-top:4px\">" + chips(st.coldB, st.bf, 5, "c", true) +
         "</div><div class=\"chips\" style=\"margin-top:4px\">" + chips(st.overB, st.bgap, 5, "o", true) + "</div></div>";
 
@@ -650,7 +671,7 @@
     if (!samsung && !ios) s += '<li><b>Chrome (Android):</b> tap <span class="kbd">⋮</span> menu → <b>Install app</b> / <b>Add to Home screen</b>.</li>';
     if (android && !samsung) s += '<li><b>Samsung Internet:</b> <span class="kbd">≡</span> → <b>Add page to</b> → <b>Home screen</b>.</li>';
     if (ios) s += '<li><b>Safari (iPhone):</b> tap <b>Share</b> → <b>Add to Home Screen</b>.</li>';
-    if (!android && !ios) s += "<li><b>Desktop Chrome / Edge:</b> click the install icon at the right end of the address bar, or menu → <b>Install MEGA//INDEX</b>.</li>";
+    if (!android && !ios) s += "<li><b>Desktop Chrome / Edge:</b> click the install icon at the right end of the address bar, or menu → <b>Install " + APP.brand + "</b>.</li>";
     s += "</ol><p>Once installed it launches full-screen and works offline.</p></div>";
     return s;
   }
@@ -693,25 +714,31 @@
 
   function setupSW() {
     if (!IS_HTTP || !("serviceWorker" in navigator)) return;
-    var hadController = !!navigator.serviceWorker.controller;
+    // Both apps share one origin and MEGA's scope contains /power/, so a page can briefly be
+    // controlled by the other app's worker. Only a change from our own worker means a new build.
+    var OWN_SW = new URL("sw.js", location.href).href;
+    function own() { var c = navigator.serviceWorker.controller; return !!c && c.scriptURL === OWN_SW; }
+    var hadController = own();
     navigator.serviceWorker.addEventListener("controllerchange", function () {
       if (hadController) $("#updateBar").hidden = false;
-      hadController = true;
+      hadController = own();
     });
     $("#updateReload").addEventListener("click", function () { location.reload(); });
-    window.addEventListener("load", function () {
+    function register() {
       navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then(function (reg) {
         document.addEventListener("visibilitychange", function () {
           if (document.visibilityState === "visible") reg.update().catch(function () {});
         });
       }).catch(function () { /* offline-first is best effort */ });
-    });
+    }
+    if (document.readyState === "complete") register();
+    else window.addEventListener("load", register);
   }
 
   /* ------------------------------------------------------------ boot */
   function ticker() {
-    var parts = ["SYS://ONLINE", "RNG <b>crypto.getRandomValues</b> + REJECTION SAMPLING", "<b>290,472,336</b> TICKETS ↔ <b>0…290,472,335</b>",
-      "ODDS <i>1 : 290,472,336</i> PER TICKET"];
+    var parts = ["SYS://ONLINE", "RNG <b>crypto.getRandomValues</b> + REJECTION SAMPLING", "<b>" + grp(G.total) + "</b> TICKETS ↔ <b>0…" + grp(G.total - 1) + "</b>",
+      "ODDS <i>1 : " + grp(G.total) + "</i> PER TICKET"];
     if (st) {
       parts.push("DATA <b>" + st.D + "</b> DRAWS " + st.first + "→" + st.last);
       parts.push("HOT <i>" + st.hotW.slice(0, 5).map(pad2).join(" ") + "</i>");
@@ -742,7 +769,7 @@
     $("#slipActions").addEventListener("click", function (e) {
       var b = e.target.closest("button"); if (!b) return;
       var act = b.getAttribute("data-act");
-      if (act === "copy") copyText("MEGA MILLIONS PICK  plays=" + state.slip.length + "\n" + slipText(state.slip), "SLIP COPIED");
+      if (act === "copy") copyText(G.name.toUpperCase() + " PICK  plays=" + state.slip.length + "\n" + slipText(state.slip), "SLIP COPIED");
       else if (act === "csv" || act === "json") exportPlays(state.slip, act);
       else if (act === "share") sharePlays(state.slip);
       else if (act === "clear") { state.slip = []; state.slipId = null; renderSlip(); toast("SLIP CLEARED"); }
@@ -815,7 +842,7 @@
       store.set(K_HIST, []); renderLog(); toast("LOG WIPED");
     });
     $("#aboutMeta").textContent = "DATA: " + (st ? st.D + " draws " + st.first + " → " + st.last : "none") +
-      " · UPDATED " + (UPDATED || "?") + " · SOURCE: NY State Open Data";
+      " · UPDATED " + (UPDATED || "?") + " · SOURCE: " + APP.source;
 
     setupInstall();
     setupSW();

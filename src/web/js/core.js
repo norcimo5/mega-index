@@ -1,4 +1,4 @@
-/* MEGA//INDEX core: pure logic (no DOM). Classic script; exposes window.MegaIndex,
+/* MEGA//INDEX + POWER//INDEX core: pure logic (no DOM). Classic script; exposes window.MegaIndex,
  * and module.exports under Node. Contract: SPEC.md sections 1-7, 9. Oracle: tools/reference.py. */
 (function (root) {
   "use strict";
@@ -30,11 +30,11 @@
 
   var MEGA_MILLIONS = makeGame({
     id: "megamillions", name: "Mega Millions", white_count: 5, white_max: 70, bonus_max: 24,
-    bonus_name: "Mega Ball", bonus_abbr: "MB", matrix_start: "2025-04-08", has_history: true
+    bonus_name: "Mega Ball", bonus_abbr: "MB", matrix_start: "2025-04-08"
   });
   var POWERBALL = makeGame({
     id: "powerball", name: "Powerball", white_count: 5, white_max: 69, bonus_max: 26,
-    bonus_name: "Powerball", bonus_abbr: "PB", matrix_start: "2015-10-07", has_history: false
+    bonus_name: "Powerball", bonus_abbr: "PB", matrix_start: "2015-10-07"
   });
   var GAMES = { megamillions: MEGA_MILLIONS, powerball: POWERBALL };
   var PLAY_LABELS = "ABCDE";
@@ -215,7 +215,6 @@
 
   function computeStats(g, draws) {
     g = getGame(g);
-    if (!g.has_history) throw new Error("no draw history for " + g.name);
     if (!draws || !draws.length) throw new Error("bad data file: no draws");
     var D = draws.length, k = g.white_count, K = g.white_max, B = g.bonus_max;
     var wf = [], bf = [], wgap = [], bgap = [], i;
@@ -296,7 +295,6 @@
       var i = rb(g.total), t = decode(g, i);
       return { whites: t.whites, bonus: t.bonus, index: i, mode: mode };
     }
-    if (!g.has_history) throw new Error("no draw history for " + g.name);
     if (!st) throw new Error("stats required for mode " + mode);
     var W = st.whites, B = st.bonuses, whites, bonus;
     if (mode === "hot") {

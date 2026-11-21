@@ -3,11 +3,16 @@
  * from js/draws-data.js. That file is pulled in with importScripts, so when the scheduled data
  * refresh rewrites it, the browser's SW update check sees a changed import, installs this worker
  * again under a new cache name, and old caches are deleted on activate. */
-var APP_VERSION = "v3";
+var APP_VERSION = "v4";
 self.window = self; /* draws-data.js assigns window.MM_DRAWS / window.MM_DRAWS_UPDATED */
 try { importScripts("./js/draws-data.js"); } catch (e) { /* keep working without the stamp */ }
 var DATA_STAMP = String(self.MM_DRAWS_UPDATED || "nodata") + "-" + ((self.MM_DRAWS && self.MM_DRAWS.length) || 0);
 var CACHE = "mega-index-" + APP_VERSION + "-" + DATA_STAMP;
+/* POWER//INDEX lives in ./power/ with its own worker (scope ./power/). Our scope "./" contains it,
+ * so never answer anything under ./power/: no MEGA page for a /power/ navigation, no power files in
+ * MEGA's cache. Shared files (js/, css/) are precached by both workers; changing one means bumping
+ * APP_VERSION here AND in power/sw.js. */
+var POWER_PATH = new URL("./power/", self.location).pathname;
 
 var PRECACHE = [
   "./",
@@ -50,6 +55,7 @@ self.addEventListener("fetch", function (event) {
   if (req.method !== "GET") return;
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  if ((url.pathname + "/").indexOf(POWER_PATH) === 0) return; /* ./power and ./power/... */
   event.respondWith(
     caches.open(CACHE).then(function (cache) {
       return cache.match(req, { ignoreSearch: true }).then(function (hit) {

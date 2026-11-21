@@ -31,9 +31,14 @@ while IFS=$'\t' read -r name code args; do
     diff "$G/$name.txt" "$TMP/out" | head -5; fi
 done < "$G/cases.tsv"
 
-# 1b. data path via env var (no --data)
-MEGA_INDEX_DATA=tests/golden/draws.csv "${CLI[@]}" guess > "$TMP/out" 2>/dev/null < /dev/null
+# 1b. data path via env var (no --data). Both vars are set at once, each to its own game's
+#     fixture, so each game must read only its own variable.
+export MEGA_INDEX_DATA=tests/golden/draws.csv POWER_INDEX_DATA=tests/golden/powerball-draws.csv
+"${CLI[@]}" guess > "$TMP/out" 2>/dev/null < /dev/null
 if cmp -s "$TMP/out" "$G/guess.txt"; then ok "env:MEGA_INDEX_DATA"; else bad "env:MEGA_INDEX_DATA" "guess via env differs"; fi
+"${CLI[@]}" guess --game powerball > "$TMP/out" 2>/dev/null < /dev/null
+if cmp -s "$TMP/out" "$G/pb_guess.txt"; then ok "env:POWER_INDEX_DATA"; else bad "env:POWER_INDEX_DATA" "powerball guess via env differs"; fi
+unset MEGA_INDEX_DATA POWER_INDEX_DATA
 
 # 2. vectors: encode and decode every line
 vf=0
@@ -55,10 +60,12 @@ pick_check() {  # label, game, args...
   local why=""
   [ $rc -eq 0 ] || why="exit $rc"
   local n; n="$(grep -c '^[A-E]: ' "$TMP/pick")"
-  head -1 "$TMP/pick" | grep -Eq '^(MEGA MILLIONS|POWERBALL) PICK  mode=(uniform|hot|cold|mixed)  plays=[1-5]$' || why="${why:+$why; }bad header"
-  grep -q '^NOTE: Fair picks do not improve your odds' "$TMP/pick" || why="${why:+$why; }missing note"
+  local hdr="MEGA MILLIONS" abbr="MB" total="290,472,336"
+  [ "$game" = powerball ] && { hdr="POWERBALL"; abbr="PB"; total="292,201,338"; }
+  head -1 "$TMP/pick" | grep -Eq "^$hdr PICK  mode=(uniform|hot|cold|mixed)  plays=[1-5]\$" || why="${why:+$why; }bad header"
+  grep -qx "NOTE: Fair picks do not improve your odds. Every ticket is 1 in $total." "$TMP/pick" || why="${why:+$why; }missing note"
   while read -r line; do
-    echo "$line" | grep -Eq '^[A-E]: [0-9]{2} [0-9]{2} [0-9]{2} [0-9]{2} [0-9]{2} (MB|PB) [0-9]{2}  index [0-9]+$' || { why="${why:+$why; }bad line '$line'"; continue; }
+    echo "$line" | grep -Eq "^[A-E]: [0-9]{2} [0-9]{2} [0-9]{2} [0-9]{2} [0-9]{2} $abbr [0-9]{2}  index [0-9]+\$" || { why="${why:+$why; }bad line '$line'"; continue; }
     read -r _ a b c d e _ m _ i <<< "$line"
     local got; got="$("${CLI[@]}" encode "$a" "$b" "$c" "$d" "$e" --bonus "$m" --game "$game" | sed -n 's/^index: //p')"
     [ "$got" = "$i" ] || why="${why:+$why; }index mismatch '$line'"
@@ -69,6 +76,9 @@ pick_check() {  # label, game, args...
 pick_check uniform megamillions -n 5
 pick_check uniform-pb powerball -n 5 --game powerball
 for m in hot cold mixed; do pick_check "$m" megamillions -n 5 --mode "$m" --data tests/golden/draws.csv; done
+for m in hot cold mixed; do
+  pick_check "$m-pb" powerball -n 5 --mode "$m" --game powerball --data tests/golden/powerball-draws.csv
+done
 
 # 4. export
 for ext in csv json; do

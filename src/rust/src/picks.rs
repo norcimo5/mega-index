@@ -3,7 +3,7 @@
 use crate::codec::{decode, encode};
 use crate::game::Game;
 use crate::stats::{Pool, Rank, Stats};
-use crate::{CliError, Result};
+use crate::Result;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode {
@@ -78,7 +78,7 @@ pub fn make_pick(g: &Game, mode: Mode, st: Option<&Stats>, rng: &mut dyn FnMut(u
         let (w, b) = decode(g, i);
         return Ticket { whites: w, bonus: b, index: i };
     }
-    let st = st.expect("history required");
+    let st = st.expect("weighted modes need draw statistics");
     let wn: Vec<u64> = (1..=g.white_max).collect();
     let bn: Vec<u64> = (1..=g.bonus_max).collect();
     let (mut whites, bonus);
@@ -115,9 +115,6 @@ pub fn make_slip(
     n: usize,
     rng: &mut dyn FnMut(u64) -> u64,
 ) -> Result<Vec<Ticket>> {
-    if mode != Mode::Uniform && st.is_none() {
-        return Err(CliError::usage(format!("no draw history for {}", g.name)));
-    }
     let mut rows: Vec<Ticket> = Vec::new();
     while rows.len() < n {
         let t = make_pick(g, mode, st, rng);

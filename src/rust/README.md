@@ -20,11 +20,23 @@ mega-index decode 147183154
 mega-index pick -n 3 [--mode uniform|hot|cold|mixed] [--export picks.csv|picks.json] [--data PATH]
 mega-index stats [--data PATH]
 mega-index guess [--data PATH]
-mega-index --game powerball decode 0     # powerball: encode/decode/uniform pick only
+mega-index --game powerball decode 0     # --game powerball works with every command
+mega-index stats --game powerball
+mega-index guess --game powerball
+mega-index pick --game powerball --mode hot -n 3
 ```
 
-History data is `data/draws.csv`, found via `--data`, then `$MEGA_INDEX_DATA`, then walking up
-from the current directory, then from the executable's directory.
+Each game has its own history file and environment variable:
+
+| game | file | env var |
+|---|---|---|
+| megamillions (default) | `data/draws.csv` | `MEGA_INDEX_DATA` |
+| powerball | `data/powerball-draws.csv` | `POWER_INDEX_DATA` |
+
+The file is found via `--data`, then the game's env var, then walking up from the current directory,
+then from the executable's directory. Each game reads only its own variable. A missing file gives
+`data file not found (use --data or POWER_INDEX_DATA)` (or `MEGA_INDEX_DATA`). The Powerball
+column is named `mb` in the CSV header for both games.
 
 ## Test
 

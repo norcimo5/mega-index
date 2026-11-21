@@ -1,4 +1,7 @@
-/* MEGA//INDEX charts: hand-drawn inline SVG, no libraries. Classic script -> window.MegaCharts. */
+/* MEGA//INDEX charts: hand-drawn inline SVG, no libraries. Classic script -> window.MegaCharts.
+ * Colors can be themed per app with CSS custom properties on the page (--chart-h, --chart-c, --chart-n,
+ * --chart-g, --chart-o, --chart-grid, --chart-axis, --chart-label, --chart-halo, --chart-cursor).
+ * Unset properties fall back to the MEGA//INDEX defaults below. */
 (function (root) {
   "use strict";
   var NS = "http://www.w3.org/2000/svg";
@@ -10,6 +13,15 @@
     g: "#f2b705",   // gold (mega ball neutral)
     o: "#0048ff"    // overdue / gap emphasis
   };
+  var INK = { grid: "#dbe3f4", axis: "#0a1230", label: "#5f6a8c", halo: "#fff", cursor: "#ff1fae" };
+
+  function theme(container) {
+    var cs = window.getComputedStyle ? getComputedStyle(container) : null, t = { fill: {} }, k;
+    function v(name, dflt) { var x = cs ? cs.getPropertyValue("--chart-" + name).trim() : ""; return x || dflt; }
+    for (k in FILL) if (Object.prototype.hasOwnProperty.call(FILL, k)) t.fill[k] = v(k, FILL[k]);
+    for (k in INK) if (Object.prototype.hasOwnProperty.call(INK, k)) t[k] = v(k, INK[k]);
+    return t;
+  }
 
   function el(tag, attrs, parent) {
     var e = document.createElementNS(NS, tag);
@@ -23,10 +35,17 @@
     return Math.ceil(v / step) * step;
   }
 
+  // 4 gridline steps that are whole, round numbers (POWER//INDEX's bigger counts: 0/40/80/120/160).
+  function evenMax(v) {
+    var steps = [5, 10, 20, 25, 40, 50, 100, 200, 250, 500], q = Math.max(v, 1) / 4;
+    for (var i = 0; i < steps.length; i++) if (steps[i] >= q) return steps[i] * 4;
+    return Math.ceil(q / 500) * 2000;
+  }
+
   /**
    * Vertical bar chart, one bar per number 1..N, sized to the container's pixel width
    * so text renders at real size. Tap or drag across it to scrub; calls onSelect(number).
-   * opts: values[] (index i -> number i+1), expected, kind(num)->'h'|'c'|'n'|'g'|'o',
+   * opts: values[] (index i -> number i+1), expected, evenTicks, kind(num)->'h'|'c'|'n'|'g'|'o',
    *       selected, onSelect, height, labelEvery, unit, title
    */
   function barChart(container, opts) {
@@ -62,7 +81,7 @@
   }
 
   function draw(container) {
-    var o = container._chartOpts;
+    var o = container._chartOpts, T = theme(container);
     var W = Math.max(280, Math.round(container.clientWidth || 320));
     var H = o.height || 190;
     var n = o.values.length;
@@ -73,7 +92,7 @@
     var vmax = 0;
     o.values.forEach(function (v) { if (v > vmax) vmax = v; });
     if (o.expected != null && o.expected > vmax) vmax = o.expected;
-    var ymax = niceMax(vmax);
+    var ymax = o.evenTicks ? evenMax(vmax) : niceMax(vmax);
     container._geom = { W: W, left: left, slot: slot };
     function y(v) { return top + plotH - (v / ymax) * plotH; }
 
@@ -83,9 +102,9 @@
     var ticks = 4;
     for (var t = 0; t <= ticks; t++) {
       var v = (ymax / ticks) * t, yy = y(v);
-      el("line", { x1: left, x2: W - right, y1: yy, y2: yy, stroke: t === 0 ? "#0a1230" : "#dbe3f4",
+      el("line", { x1: left, x2: W - right, y1: yy, y2: yy, stroke: t === 0 ? T.axis : T.grid,
         "stroke-width": t === 0 ? 1.2 : 1, "stroke-dasharray": t === 0 ? "" : "2 3" }, svg);
-      var lab = el("text", { x: left - 5, y: yy + 3.5, "text-anchor": "end", "font-size": 9.5, fill: "#5f6a8c" }, svg);
+      var lab = el("text", { x: left - 5, y: yy + 3.5, "text-anchor": "end", "font-size": 9.5, fill: T.label }, svg);
       lab.textContent = Math.round(v);
     }
     // bars
@@ -96,16 +115,16 @@
       var x = left + i * slot + (slot - barW) / 2;
       var yv = y(val);
       var r = el("rect", { x: x.toFixed(2), y: yv.toFixed(2), width: barW.toFixed(2),
-        height: Math.max(0, top + plotH - yv).toFixed(2), fill: FILL[k] || FILL.n, "data-k": k }, bars);
-      if (k === "h" || k === "c" || k === "o") r.setAttribute("stroke", "#0a1230"), r.setAttribute("stroke-width", "0.6");
+        height: Math.max(0, top + plotH - yv).toFixed(2), fill: T.fill[k] || T.fill.n, "data-k": k }, bars);
+      if (k === "h" || k === "c" || k === "o") r.setAttribute("stroke", T.axis), r.setAttribute("stroke-width", "0.6");
       container._bars.push(r);
     }
     // expected line
     if (o.expected != null) {
       var ey = y(o.expected);
-      el("line", { x1: left, x2: W - right, y1: ey, y2: ey, stroke: "#0a1230", "stroke-width": 1.4, "stroke-dasharray": "5 3" }, svg);
-      var et = el("text", { x: W - right, y: ey - 4, "text-anchor": "end", "font-size": 10, "font-weight": 800, fill: "#0a1230",
-        stroke: "#fff", "stroke-width": 3, "paint-order": "stroke" }, svg);
+      el("line", { x1: left, x2: W - right, y1: ey, y2: ey, stroke: T.axis, "stroke-width": 1.4, "stroke-dasharray": "5 3" }, svg);
+      var et = el("text", { x: W - right, y: ey - 4, "text-anchor": "end", "font-size": 10, "font-weight": 800, fill: T.axis,
+        stroke: T.halo, "stroke-width": 3, "paint-order": "stroke" }, svg);
       et.textContent = "EXPECTED " + o.expectedText;
     }
     // x labels
@@ -113,14 +132,14 @@
     for (var j = 1; j <= n; j++) {
       if (j !== 1 && j % every !== 0) continue;
       var tx = left + (j - 1) * slot + slot / 2;
-      var xt = el("text", { x: tx, y: H - 7, "text-anchor": "middle", "font-size": 9.5, fill: "#5f6a8c" }, svg);
+      var xt = el("text", { x: tx, y: H - 7, "text-anchor": "middle", "font-size": 9.5, fill: T.label }, svg);
       xt.textContent = j < 10 ? "0" + j : String(j);
-      el("line", { x1: tx, x2: tx, y1: top + plotH, y2: top + plotH + 3, stroke: "#0a1230" }, svg);
+      el("line", { x1: tx, x2: tx, y1: top + plotH, y2: top + plotH + 3, stroke: T.axis }, svg);
     }
     // selection marker (cursor)
     var cur = el("g", { class: "cursor", visibility: "hidden" }, svg);
-    el("line", { y1: top - 6, y2: top + plotH, stroke: "#0a1230", "stroke-width": 1, "stroke-dasharray": "1 2" }, cur);
-    el("path", { d: "M-5,-7 L5,-7 L0,-1 Z", fill: "#ff1fae" }, cur);
+    el("line", { y1: top - 6, y2: top + plotH, stroke: T.axis, "stroke-width": 1, "stroke-dasharray": "1 2" }, cur);
+    el("path", { d: "M-5,-7 L5,-7 L0,-1 Z", fill: T.cursor }, cur);
     container._cursor = cur;
     container._y = y;
     container.innerHTML = "";

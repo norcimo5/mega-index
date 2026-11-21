@@ -1,4 +1,4 @@
-# MEGA//INDEX (web / PWA)
+# MEGA//INDEX + POWER//INDEX (web / PWA)
 
 A static, installable Mega Millions picker and ticket-to-index codec. It has no backend and no external fonts, CDNs or libraries, and it works from `file://` as well as over HTTPS.
 
@@ -28,12 +28,25 @@ All randomness comes from `crypto.getRandomValues` with rejection sampling, so t
 - `sw.js` is the offline-first service worker. Its cache name is `mega-index-<APP_VERSION>-<MM_DRAWS_UPDATED>-<count>`, and it pulls the data stamp in with `importScripts`. A data refresh therefore triggers a service worker update and a fresh precache on installed phones, with no change to `sw.js` needed. **Bump `APP_VERSION` whenever you change any other app file.**
 - `manifest.webmanifest` and `icons/` (regenerate the icons with `python3 tools/make_icons.py`).
 
+## POWER//INDEX (`power/`)
+
+A second installable PWA for Powerball (5 of 1-69 + Powerball 1-26, 1 in 292,201,338), served at `/power/` by the same Pages deploy. It reuses the shared code: `power/index.html` sets `window.APP_GAME = "powerball"` and loads `../js/core.js`, `../js/charts.js`, `../js/app.js` and `../css/app.css`, then `power/css/power.css`, which only re-points the theme tokens (rose background with a red grid, red Powerball, ember-orange "hot", cyan accents, red status bar).
+
+- `power/js/draws-data.js` (`window.PB_DRAWS`) is **generated** by `tools/refresh_data.py`.
+- `power/sw.js` has scope `power/`, caches as `power-index-<APP_VERSION>-<PB_DRAWS_UPDATED>-<count>` and precaches the shared `../js` and `../css` files too.
+- `power/manifest.webmanifest` has its own `id` (`/mega-index/power/`). Chrome resolves `id` against the origin, so MEGA's `"./"` means the origin root and the two never collide. Do not change MEGA's `id`: that would orphan the installed app.
+- MEGA's `sw.js` ignores every request under `./power/`, and each app keeps its own localStorage keys (`mega-index.*` / `power-index.*`).
+- Icons: `python3 tools/make_icons.py power` writes `power/icons/`.
+- **A change to a shared file (`js/core.js`, `js/charts.js`, `js/app.js`, `css/app.css`) needs both `APP_VERSION`s bumped**: `sw.js` and `power/sw.js`.
+
 ## Test
 
 ```
-node src/web/tests/test-core.js   # vectors, endpoints, 140k round trips, golden stats/guess, export format
-node src/web/tests/test-pwa.js    # precache files exist, manifest, icon sizes, relative URLs
+node src/web/tests/test-core.js   # vectors, endpoints, 220k round trips (both games), MM + PB goldens, golden stats/guess, export format
+node src/web/tests/test-pwa.js    # both apps: precache files exist, manifests/ids, icon sizes, relative URLs
+node src/web/tests/test-two-apps.js   # headless Chrome: both apps install + work offline on one origin
 node src/web/tools/shoot.js http://127.0.0.1:8000/ /tmp/shots   # headless Chrome: screenshots, console errors, overflow
+SHOT_PREFIX=power- node src/web/tools/shoot.js http://127.0.0.1:8000/power/ src/web/screenshots
 ```
 
 ## Honest note

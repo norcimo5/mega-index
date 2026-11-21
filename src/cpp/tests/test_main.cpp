@@ -46,7 +46,7 @@ static Result run_cli(const std::vector<std::string>& args, const DataEnv& env) 
     int rc = run(args, o, e, env);
     return {rc, o.str(), e.str()};
 }
-static DataEnv empty_env() { return DataEnv{"", "/nonexistent-cwd", ""}; }
+static DataEnv empty_env() { return DataEnv{"", "/nonexistent-cwd", "", ""}; }
 static Result cli(const std::vector<std::string>& a) { return run_cli(a, empty_env()); }
 
 static std::string mkdtemp_dir() {
@@ -216,9 +216,10 @@ static void test_errors() {
     err({"pick", "-n", "0"}, 2, "plays must be 1-5");
     err({"pick", "--mode", "lucky"}, 2, "unknown mode 'lucky'");
     err({"pick", "--export", "picks.txt"}, 2, "export path must end in .csv or .json");
-    err({"pick", "--mode", "hot", "--game", "powerball"}, 2, "no draw history for Powerball");
+    err({"pick", "--mode", "hot", "--game", "powerball"}, 1,
+        "data file not found (use --data or POWER_INDEX_DATA)");
     err({"pick", "extra"}, 2, "unexpected argument 'extra'");
-    err({"stats", "--game", "powerball"}, 2, "no draw history for Powerball");
+    err({"stats", "--game", "powerball"}, 1, "data file not found (use --data or POWER_INDEX_DATA)");
     err({"stats", "x"}, 2, "unexpected argument 'x'");
     err({"stats", "--data", "/nonexistent/none.csv"}, 1, "cannot read data file '/nonexistent/none.csv'");
     err({"stats"}, 1, "data file not found (use --data or MEGA_INDEX_DATA)");
@@ -326,6 +327,34 @@ static void test_golden_like(const std::string& root) {
     r = run_cli({"stats", "--data", csv}, empty_env());
     CHECK(r.rc == 0);
     CHECK(r.out == slurp(root + "/tests/golden/stats.txt"));
+
+    // Powerball: 64-bit chi-square/fmt2 path, byte-identical to the oracle's golden files.
+    std::string pcsv = root + "/tests/golden/powerball-draws.csv";
+    if (access(pcsv.c_str(), R_OK) != 0) return;
+    r = run_cli({"stats", "--game", "powerball", "--data", pcsv}, empty_env());
+    CHECK(r.rc == 0);
+    CHECK(r.out == slurp(root + "/tests/golden/pb_stats.txt"));
+    r = run_cli({"guess", "--game", "powerball", "--data", pcsv}, empty_env());
+    CHECK(r.rc == 0);
+    CHECK(r.out == slurp(root + "/tests/golden/pb_guess.txt"));
+    CHECK(r.out.find("POWERBALL GUESS  draws=1435  2015-10-07..2026-11-18\n") == 0);
+    CHECK(r.out.find("1 in 292,201,338") != std::string::npos);
+    // fmt2 beyond 2^32 (200 * num overflows 32 bits)
+    CHECK(fmt2(100000000000LL, 3, false) == "33333333333.33");
+    // wrong-game data files are rejected
+    r = run_cli({"stats", "--game", "powerball", "--data", csv}, empty_env());
+    CHECK(r.rc == 1 && r.err.rfind("error: bad data file: line ", 0) == 0);
+    r = run_cli({"guess", "--data", pcsv}, empty_env());
+    CHECK(r.rc == 1 && r.err.rfind("error: bad data file: line ", 0) == 0);
+    // weighted picks for powerball from the real history
+    for (const char* m : {"hot", "cold", "mixed"}) {
+        r = run_cli({"pick", "-n", "5", "--mode", m, "--game", "powerball", "--data", pcsv},
+                    empty_env());
+        CHECK(r.rc == 0);
+        CHECK(r.out.rfind(std::string("POWERBALL PICK  mode=") + m + "  plays=5\n", 0) == 0);
+        CHECK(r.out.find(" PB ") != std::string::npos);
+        CHECK(r.out.find("1 in 292,201,338") != std::string::npos);
+    }
 }
 
 static void test_picks_and_export() {
@@ -416,18 +445,18 @@ static void test_data_discovery() {
 
     // find_data precedence
     std::string cli_path = "explicit.csv";
-    DataEnv e{tmp + "/env.csv", tmp + "/proj/a/b/c", tmp + "/other"};
-    CHECK(find_data(&cli_path, e) == "explicit.csv");
-    CHECK(find_data(nullptr, e) == tmp + "/env.csv");
+    DataEnv e{tmp + "/env.csv", tmp + "/proj/a/b/c", tmp + "/other", ""};
+    CHECK(find_data(&cli_path, e, mega_millions()) == "explicit.csv");
+    CHECK(find_data(nullptr, e, mega_millions()) == tmp + "/env.csv");
     e.env_data = "";
-    CHECK(find_data(nullptr, e) == tmp + "/proj/data/draws.csv");  // walk up from cwd
+    CHECK(find_data(nullptr, e, mega_millions()) == tmp + "/proj/data/draws.csv");  // walk up from cwd
     e.cwd = tmp + "/elsewhere";
     e.exe_dir = tmp + "/proj/bin";
-    CHECK(find_data(nullptr, e) == tmp + "/proj/data/draws.csv");  // walk up from exe dir
+    CHECK(find_data(nullptr, e, mega_millions()) == tmp + "/proj/data/draws.csv");  // walk up from exe dir
     e.exe_dir = tmp + "/other";
     bool threw = false;
     try {
-        find_data(nullptr, e);
+        find_data(nullptr, e, mega_millions());
     } catch (const CliError& ce) {
         threw = ce.code == 1 && std::string(ce.what()) ==
                                     "data file not found (use --data or MEGA_INDEX_DATA)";
@@ -437,7 +466,7 @@ static void test_data_discovery() {
     CHECK(DataEnv::from_process().exe_dir.size() > 0);  // /proc/self/exe resolves
 
     // through run()
-    e = DataEnv{"", tmp + "/proj/a", tmp + "/other"};
+    e = DataEnv{"", tmp + "/proj/a", tmp + "/other", ""};
     Result r = run_cli({"guess"}, e);
     CHECK(r.rc == 0 && r.out.rfind("MEGA MILLIONS GUESS  draws=3  2025-04-08..2025-04-15\n", 0) == 0);
 
@@ -472,6 +501,104 @@ static void test_data_discovery() {
     CHECK(WIFEXITED(rc) && WEXITSTATUS(rc) == 2);
 }
 
+static void test_powerball_data() {
+    const Game& pb = powerball();
+    static const char* const PB_CSV =
+        "date,w1,w2,w3,w4,w5,mb\n2015-10-07,18,30,40,48,52,9\n2015-10-10,5,10,69,20,1,26\n"
+        "2015-10-14,69,68,67,66,65,2\n";
+    std::vector<Draw> d = parse_draws(PB_CSV, pb);
+    CHECK(d.size() == 3 && d[1].whites[0] == 1 && d[1].whites[4] == 69 && d[1].mb == 26);
+    // 69 / bonus 26 are fine for Powerball but invalid for Mega Millions? (69 ok, 26 not)
+    bool threw = false;
+    try {
+        parse_draws(PB_CSV, mega_millions());
+    } catch (const CliError& e) {
+        threw = e.code == 1 && std::string(e.what()) == "bad data file: line 3";
+    }
+    CHECK(threw);
+    Stats st(pb, d);
+    CHECK(st.wf.size() == 70 && st.bf.size() == 27);
+    CHECK(st.wf[69] == 2 && st.bf[26] == 1);
+
+    // weighted picks only ever produce Powerball-valid tickets
+    for (Mode m : {Mode::Hot, Mode::Cold, Mode::Mixed}) {
+        for (int i = 0; i < 300; ++i) {
+            Pick p = make_pick(pb, m, &st);
+            CHECK(p.whites.size() == 5 && p.bonus >= 1 && p.bonus <= 26 && p.index < pb.total);
+            CHECK(encode(pb, p.whites, p.bonus) == p.index);
+            std::set<int> u(p.whites.begin(), p.whites.end());
+            CHECK(u.size() == 5 && *u.begin() >= 1 && *u.rbegin() <= 69);
+        }
+    }
+
+    // data discovery: POWER_INDEX_DATA and powerball-draws.csv, per game isolation
+    std::string tmp = mkdtemp_dir();
+    mkdirs(tmp + "/proj/data");
+    mkdirs(tmp + "/proj/a/b");
+    mkdirs(tmp + "/proj/bin");
+    mkdirs(tmp + "/elsewhere");
+    mkdirs(tmp + "/other");
+    write_file(tmp + "/proj/data/powerball-draws.csv", PB_CSV);
+    write_file(tmp + "/env.csv", PB_CSV);
+    DataEnv e{"/mm/only.csv", tmp + "/proj/a/b", tmp + "/other", tmp + "/env.csv"};
+    CHECK(find_data(nullptr, e, pb) == tmp + "/env.csv");           // own env var
+    CHECK(find_data(nullptr, e, mega_millions()) == "/mm/only.csv");  // not POWER_INDEX_DATA
+    std::string cli_path = "x.csv";
+    CHECK(find_data(&cli_path, e, pb) == "x.csv");
+    e.env_data_pb = "";
+    CHECK(find_data(nullptr, e, pb) == tmp + "/proj/data/powerball-draws.csv");
+    e.env_data = "";
+    e.cwd = tmp + "/elsewhere";
+    e.exe_dir = tmp + "/proj/bin";
+    CHECK(find_data(nullptr, e, pb) == tmp + "/proj/data/powerball-draws.csv");  // exe dir walk
+    e.exe_dir = tmp + "/other";
+    bool nf = false, nm = false;
+    try {
+        find_data(nullptr, e, pb);
+    } catch (const CliError& ce) {
+        nf = ce.code == 1 &&
+             std::string(ce.what()) == "data file not found (use --data or POWER_INDEX_DATA)";
+    }
+    CHECK(nf || access("/data/powerball-draws.csv", F_OK) == 0 ||
+          access("/tmp/data/powerball-draws.csv", F_OK) == 0);
+    // powerball file is not mistaken for the mega millions one
+    e.cwd = tmp + "/proj/a/b";
+    try {
+        find_data(nullptr, e, mega_millions());
+    } catch (const CliError& ce) {
+        nm = std::string(ce.what()) == "data file not found (use --data or MEGA_INDEX_DATA)";
+    }
+    CHECK(nm || access("/data/draws.csv", F_OK) == 0 || access("/tmp/data/draws.csv", F_OK) == 0);
+
+    // through run()
+    Result r = run_cli({"stats", "--game", "powerball"}, DataEnv{"", "/nonexistent", "", tmp + "/env.csv"});
+    CHECK(r.rc == 0 && r.out.rfind("POWERBALL STATS\ndraws: 3\n", 0) == 0);
+    CHECK(r.out.find("expected PB freq: 0.12\n") != std::string::npos);
+    CHECK(r.out.find("HOT PB:") != std::string::npos);
+    // MEGA_INDEX_DATA does not leak into powerball
+    r = run_cli({"guess", "--game", "powerball"}, DataEnv{tmp + "/env.csv", "/nonexistent", "", ""});
+    CHECK(r.rc == 1 && r.err == "error: data file not found (use --data or POWER_INDEX_DATA)\n");
+    r = run_cli({"pick", "--mode", "mixed", "--game", "powerball"},
+                DataEnv{"", "/nonexistent", "", tmp + "/env.csv"});
+    CHECK(r.rc == 0 && r.out.rfind("POWERBALL PICK  mode=mixed  plays=1\n", 0) == 0);
+
+    if (g_bin.empty()) return;
+    int rc = 0;
+    std::string o = shell_out("cd '" + tmp + "/elsewhere' && env -u MEGA_INDEX_DATA POWER_INDEX_DATA='" +
+                                  tmp + "/env.csv' '" + g_bin + "' guess --game powerball 2>&1", &rc);
+    CHECK(rc == 0 && o.rfind("POWERBALL GUESS  draws=3", 0) == 0);
+    mkdirs(tmp + "/nodata");
+    std::string cp = "cp '" + g_bin + "' '" + tmp + "/nodata/mega-index'";
+    CHECK(std::system(cp.c_str()) == 0);
+    o = shell_out("cd '" + tmp + "/elsewhere' && MEGA_INDEX_DATA='" + tmp + "/env.csv' env -u POWER_INDEX_DATA '" +
+                      tmp + "/nodata/mega-index' guess --game powerball 2>&1 >/dev/null", &rc);
+    CHECK(o == "error: data file not found (use --data or POWER_INDEX_DATA)\n" ||
+          access("/tmp/data/powerball-draws.csv", F_OK) == 0);
+    o = shell_out("cd '" + tmp + "/proj/a/b' && env -u POWER_INDEX_DATA '" + g_bin +
+                      "' pick --mode hot --game powerball 2>&1", &rc);
+    CHECK(rc == 0 && o.rfind("POWERBALL PICK  mode=hot  plays=1\n", 0) == 0);
+}
+
 int main(int argc, char** argv) {
     if (argc > 1) g_bin = argv[1];
     // repo root guess: <bin>/../../../.. (src/cpp/build/mega-index -> repo root)
@@ -494,6 +621,7 @@ int main(int argc, char** argv) {
     if (!root.empty()) test_golden_like(root);
     test_picks_and_export();
     test_data_discovery();
+    test_powerball_data();
     std::printf("%d checks, %d failed\n", g_checks, g_fails);
     return g_fails == 0 ? 0 : 1;
 }

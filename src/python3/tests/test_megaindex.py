@@ -20,6 +20,8 @@ from megaindex.stats import Stats, find_data, load_draws  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(SRC))
 GOLDEN_DRAWS = os.path.join(REPO, "tests", "golden", "draws.csv")
+GOLDEN_PB_DRAWS = os.path.join(REPO, "tests", "golden", "powerball-draws.csv")
+GOLDEN_DIR = os.path.join(REPO, "tests", "golden")
 SCRIPT = os.path.join(SRC, "mega_index.py")
 
 
@@ -128,8 +130,10 @@ class TestValidation(unittest.TestCase):
             (["pick", "-n", "0"], 2, "error: plays must be 1-5\n"),
             (["pick", "--mode", "lucky"], 2, "error: unknown mode 'lucky'\n"),
             (["pick", "--export", "a.txt"], 2, "error: export path must end in .csv or .json\n"),
-            (["pick", "--mode", "hot", "--game", "powerball"], 2, "error: no draw history for Powerball\n"),
-            (["stats", "--game", "powerball"], 2, "error: no draw history for Powerball\n"),
+            (["pick", "--mode", "hot", "--game", "powerball", "--data", "/no/pb.csv"], 1,
+             "error: cannot read data file '/no/pb.csv'\n"),
+            (["stats", "--game", "powerball", "--data", GOLDEN_DRAWS], 1, "error: bad data file: line 7\n"),
+            (["stats", "--game", "megamillions", "--data", GOLDEN_PB_DRAWS], 1, "error: bad data file: line 24\n"),
             (["stats", "--data", "/no/such/file.csv"], 1, "error: cannot read data file '/no/such/file.csv'\n"),
         ]
         for argv, rc, err in cases:
@@ -288,6 +292,56 @@ class TestExport(unittest.TestCase):
         self.assertNotIn("exported", out)
 
 
+def golden(name):
+    with open(os.path.join(GOLDEN_DIR, name)) as fh:
+        return fh.read()
+
+
+class TestPowerballHistory(unittest.TestCase):
+    def test_stats_matches_golden(self):
+        rc, out, err = run(["stats", "--game", "powerball", "--data", GOLDEN_PB_DRAWS])
+        self.assertEqual((rc, err), (0, ""))
+        self.assertEqual(out, golden("pb_stats.txt"))
+        self.assertIn("expected PB freq: 55.19", out)
+        self.assertIn("chi-square PB: 24.64 (df 25)", out)
+
+    def test_guess_matches_golden(self):
+        rc, out, err = run(["guess", "--game", "powerball", "--data", GOLDEN_PB_DRAWS])
+        self.assertEqual((rc, err), (0, ""))
+        self.assertEqual(out, golden("pb_guess.txt"))
+
+    def test_guess_tickets_valid(self):
+        st = Stats(PB, load_draws(GOLDEN_PB_DRAWS, PB))
+        self.assertEqual(st.D, 1435)
+        for _, w, b, i in guess_tickets(st):
+            self.assertTrue(valid(PB, w, b))
+            self.assertEqual(encode(PB, w, b), i)
+
+    def test_weighted_picks(self):
+        st = Stats(PB, load_draws(GOLDEN_PB_DRAWS, PB))
+        for mode in ("hot", "cold", "mixed"):
+            for _ in range(200):
+                w, b, i = make_pick(PB, mode, st)
+                self.assertTrue(valid(PB, w, b), (mode, w, b))
+                self.assertEqual(encode(PB, w, b), i)
+            rc, out, err = run(["pick", "-n", "3", "--mode", mode, "--game", "powerball",
+                                "--data", GOLDEN_PB_DRAWS])
+            self.assertEqual((rc, err), (0, ""))
+            lines = out.splitlines()
+            self.assertEqual(lines[0], "POWERBALL PICK  mode=%s  plays=3" % mode)
+            self.assertEqual(len(lines), 6)
+            for ln in lines[1:4]:
+                self.assertIn(" PB ", ln)
+            self.assertIn("1 in 292,201,338", lines[4])
+
+    def test_mixed_pool_sizes(self):
+        # cold pool for mixed is the K-3 = 66 remaining whites; every ticket stays valid
+        st = Stats(PB, load_draws(GOLDEN_PB_DRAWS, PB))
+        for _ in range(200):
+            w, _, _ = make_pick(PB, "mixed", st)
+            self.assertEqual(len(set(w)), 5)
+
+
 class TestDataDiscovery(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -311,6 +365,50 @@ class TestDataDiscovery(unittest.TestCase):
         self.assertEqual(find_data(None, cwd=self.deep, environ={"MEGA_INDEX_DATA": "y.csv"}), "y.csv")
         # empty env var is ignored
         self.assertEqual(find_data(None, cwd=self.deep, environ={"MEGA_INDEX_DATA": ""}), self.csv)
+
+    def test_env_is_per_game(self):
+        env = {"MEGA_INDEX_DATA": "mm.csv", "POWER_INDEX_DATA": "pb.csv"}
+        self.assertEqual(find_data(None, cwd=self.deep, environ=env), "mm.csv")
+        self.assertEqual(find_data(None, cwd=self.deep, environ=env, g=PB), "pb.csv")
+        # a game never reads the other game's variable
+        self.assertEqual(find_data(None, cwd=self.deep, environ={"POWER_INDEX_DATA": "pb.csv"}), self.csv)
+        with self.assertRaises(CliError):
+            find_data(None, cwd=self.empty, script_dir=self.empty, environ={"MEGA_INDEX_DATA": "mm.csv"}, g=PB)
+
+    def test_powerball_walk_up(self):
+        pb = os.path.join(self.root, "data", "powerball-draws.csv")
+        shutil.copy(GOLDEN_PB_DRAWS, pb)
+        self.assertEqual(find_data(None, cwd=self.deep, script_dir="/", environ={}, g=PB), pb)
+        self.assertEqual(find_data(None, cwd="/", script_dir=self.deep, environ={}, g=PB), pb)
+        self.assertEqual(find_data(None, cwd=self.deep, script_dir="/", environ={}), self.csv)
+        self.assertEqual(find_data(None, cwd=self.deep, environ={"POWER_INDEX_DATA": ""}, g=PB), pb)
+
+    def test_powerball_not_found_message(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as d:
+            if find_data_safe(d, PB):
+                self.skipTest("a data/powerball-draws.csv exists above /tmp")
+            rc, out, err = run(["stats", "--game", "powerball"], cwd=d, script_dir=d, environ={})
+            self.assertEqual((rc, out, err),
+                             (1, "", "error: data file not found (use --data or POWER_INDEX_DATA)\n"))
+            # Mega Millions ignores POWER_INDEX_DATA
+            rc, out, err = run(["guess"], cwd=d, script_dir=d, environ={"POWER_INDEX_DATA": "x"})
+            self.assertEqual((rc, out), (1, ""))
+            self.assertEqual(err, "error: data file not found (use --data or MEGA_INDEX_DATA)\n")
+
+    def test_cli_power_env(self):
+        rc, out, err = run(["guess", "--game", "powerball"], cwd=self.empty, script_dir=self.empty,
+                           environ={"POWER_INDEX_DATA": GOLDEN_PB_DRAWS})
+        self.assertEqual((rc, err), (0, ""))
+        self.assertEqual(out, golden("pb_guess.txt"))
+
+    def test_real_subprocess_power_env(self):
+        import subprocess
+        env = dict(os.environ, POWER_INDEX_DATA=GOLDEN_PB_DRAWS)
+        env.pop("MEGA_INDEX_DATA", None)
+        r = subprocess.run([sys.executable, SCRIPT, "guess", "--game", "powerball"], cwd=self.empty,
+                           env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout, golden("pb_guess.txt"))
 
     def test_walk_up_from_cwd(self):
         self.assertEqual(find_data(None, cwd=self.deep, script_dir="/", environ={}), self.csv)
@@ -359,9 +457,9 @@ class TestDataDiscovery(unittest.TestCase):
             self.assertTrue(r.stdout.startswith("MEGA MILLIONS STATS\n"))
 
 
-def find_data_safe(start):
+def find_data_safe(start, g=MM):
     try:
-        find_data(None, cwd=start, script_dir=start, environ={})
+        find_data(None, cwd=start, script_dir=start, environ={}, g=g)
         return True
     except CliError:
         return False

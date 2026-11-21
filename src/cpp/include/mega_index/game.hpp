@@ -19,12 +19,13 @@ struct Game {
     const char* bonus_name;
     const char* bonus_abbr;
     const char* matrix_start;
-    bool has_history;
+    const char* data_file;  // under data/, e.g. draws.csv
+    const char* data_env;   // env var naming the data file
     u64 white_combos;  // C(white_max, white_count)
     u64 total;         // white_combos * bonus_max
 
     Game(const char* id_, const char* name_, int wc, int wm, int bm, const char* bn,
-         const char* ba, const char* ms, bool hist);
+         const char* ba, const char* ms, const char* df, const char* de);
 };
 
 const Game& mega_millions();

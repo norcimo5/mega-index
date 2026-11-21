@@ -26,8 +26,9 @@ const char* const USAGE =
     "\n"
     "games: megamillions (default; 5 of 1-70 + Mega Ball 1-24), powerball (5 of 1-69 + "
     "Powerball 1-26)\n"
-    "data:  --data PATH, else $MEGA_INDEX_DATA, else data/draws.csv found walking up from cwd, "
-    "then from the program dir\n";
+    "data:  --data PATH, else $MEGA_INDEX_DATA (megamillions) / $POWER_INDEX_DATA (powerball), "
+    "else data/draws.csv / data/powerball-draws.csv found walking up from cwd, then from the "
+    "program dir\n";
 
 namespace {
 
@@ -81,10 +82,6 @@ const Game& get_game(const Parsed& p) {
     return *g;
 }
 
-void need_history(const Game& g) {
-    if (!g.has_history) throw CliError(std::string("no draw history for ") + g.name);
-}
-
 std::string upper(std::string s) {
     for (char& c : s) {
         if (c >= 'a' && c <= 'z') c = static_cast<char>(c - 'a' + 'A');
@@ -130,7 +127,7 @@ Stats load_stats(const Parsed& p, const Game& g, const DataEnv& env) {
         path_store = p.opts.at("data");
         cli = &path_store;
     }
-    return Stats(g, load_draws(find_data(cli, env), g));
+    return Stats(g, load_draws(find_data(cli, env, g), g));
 }
 
 void cmd_pick(const std::vector<std::string>& argv, std::ostream& out, const DataEnv& env) {
@@ -152,11 +149,6 @@ void cmd_pick(const std::vector<std::string>& argv, std::ostream& out, const Dat
     std::string exp = p.get("export", "");
     if (exporting && !has_export_ext(exp)) {
         throw CliError("export path must end in .csv or .json");
-    }
-    if (mode == Mode::Uniform) {
-        // no history needed
-    } else {
-        need_history(g);
     }
     std::vector<Play> plays;
     if (mode == Mode::Uniform) {
@@ -182,7 +174,6 @@ void cmd_stats_guess(const std::vector<std::string>& argv, std::ostream& out, co
     Parsed p = parse_args(argv, 1, {{"--data", "data"}, {"--game", "game"}});
     if (!p.pos.empty()) throw CliError("unexpected argument '" + p.pos[0] + "'");
     const Game& g = get_game(p);
-    need_history(g);
     Stats st = load_stats(p, g, env);
     out << (guess ? render_guess(st) : render_stats(st));
 }
