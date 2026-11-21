@@ -124,13 +124,17 @@
       <div class="hud panel">
         <div class="panel-head"><span class="ph-tag">EN</span><h2>SELECT 5 + 1</h2><span class="ph-meta" id="encCount">0/5 &middot; 0/1</span></div>
         <div class="enc-readout" id="encSlots" aria-live="polite"></div>
+        <p class="lock-hint" id="encHint">TAP TO LOCK &middot; <b>RANDOM</b> FILLS THE REST</p>
         <div class="enc-result" id="encResult">
           <div class="label">INDEX</div>
           <div class="big-idx" id="encIdx">&mdash;</div>
           <div class="enc-msg" id="encMsg">Pick 5 white balls and 1 Mega Ball.</div>
         </div>
+        <button class="btn btn-primary btn-xl btn-random" type="button" id="encRandom">
+          <svg class="dice" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.7"/><circle cx="15.5" cy="8.5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="8.5" cy="15.5" r="1.7"/><circle cx="15.5" cy="15.5" r="1.7"/></svg> RANDOM
+        </button>
+        <p class="lock-odds" id="encOdds"></p>
         <div class="actions">
-          <button class="btn" type="button" id="encLucky">RANDOM</button>
           <button class="btn" type="button" id="encCopy" disabled>COPY</button>
           <button class="btn" type="button" id="encToDec" disabled>&rarr; DECODE</button>
           <button class="btn btn-danger" type="button" id="encClear">CLEAR</button>

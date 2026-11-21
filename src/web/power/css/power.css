@@ -76,6 +76,10 @@
   --heat-base: #ffffff;
   --heat-hot: #f06400;
   --heat-ink: #1a0710;
+
+  /* CODEC locks: electric cyan on the rose/red theme */
+  --lock: #00c8f0; --lock-ink: #1a0710; --lock-ring: #00e1ff; --lock-glow: rgba(0, 214, 255, .75);
+  --lock-badge: #00e1ff; --lock-text: #006f8c;
 }
 
 /* the bonus tag sits on red, so its text goes white */

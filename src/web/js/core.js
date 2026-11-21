@@ -342,6 +342,35 @@
     }
   }
 
+  /* ------------------------------------------------------------ lock + fill (CODEC RANDOM) */
+  // Keep the locked numbers and draw the rest: free whites uniformly without replacement from the
+  // numbers not locked, the bonus uniformly unless locked. Every ticket containing the locks is
+  // equally likely. lockedBonus: null/undefined = draw it. All six locked = the locks, nothing drawn.
+  function fillTicket(g, lockedWhites, lockedBonus, rb) {
+    g = getGame(g);
+    rb = rb || randbelow;
+    var locked = (lockedWhites || []).slice().sort(numAsc), i;
+    if (locked.length > g.white_count) throw new Error("expected " + g.white_count + " white balls, got " + locked.length);
+    var seen = {};
+    for (i = 0; i < locked.length; i++) {
+      var w = locked[i];
+      if (!Number.isInteger(w) || w < 1 || w > g.white_max) throw new Error("white ball " + w + " out of range 1-" + g.white_max);
+      if (seen[w]) throw new Error("duplicate white ball " + w);
+      seen[w] = true;
+    }
+    var hasBonus = lockedBonus !== undefined && lockedBonus !== null;
+    if (hasBonus && (!Number.isInteger(lockedBonus) || lockedBonus < 1 || lockedBonus > g.bonus_max))
+      throw new Error(g.bonus_name + " " + lockedBonus + " out of range 1-" + g.bonus_max);
+    var pool = [];
+    for (i = 1; i <= g.white_max; i++) if (!seen[i]) pool.push(i);
+    var drawn = [];
+    while (locked.length + drawn.length < g.white_count) drawn.push(pool.splice(rb(pool.length), 1)[0]);
+    var bonus = hasBonus ? lockedBonus : rb(g.bonus_max) + 1;
+    var whites = locked.concat(drawn).sort(numAsc);
+    return { whites: whites, bonus: bonus, index: encode(g, whites, bonus),
+             drawnWhites: drawn.sort(numAsc), drawnBonus: !hasBonus };
+  }
+
   /* ------------------------------------------------------------ guess (deterministic) */
   function guessTickets(st) {
     var g = st.game;
@@ -408,6 +437,7 @@
     rankHot: rankHot, rankCold: rankCold, rankOverdue: rankOverdue,
     weightedTake: weightedTake, hotWeights: hotWeights, coldWeights: coldWeights,
     makePick: makePick, makeSlip: makeSlip, rerollPlay: rerollPlay,
+    fillTicket: fillTicket,
     guessTickets: guessTickets, guessLines: guessLines,
     utcStamp: utcStamp, fileStamp: fileStamp, exportCsv: exportCsv, exportJson: exportJson
   };

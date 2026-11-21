@@ -232,6 +232,56 @@ section("weighted modes");
   ok(r.play === "B" && r.mode === "hot" && r.index !== slip[0].index && r.index !== slip[2].index, "rerollPlay");
 })();
 
+section("fillTicket: locks kept, rest uniform (CODEC RANDOM)");
+(function () {
+  // locks preserved, result valid + distinct, index consistent
+  var good = true;
+  [[MM, [7, 19], 8], [PB, [69], null], [MM, [], 8], [PB, [1, 2, 3, 4], 26], [MM, [], null]].forEach(function (c) {
+    for (var i = 0; i < 3000; i++) {
+      var t = M.fillTicket(c[0], c[1], c[2]);
+      if (!validTicket(c[0], t) || M.encode(c[0], t.whites, t.bonus) !== t.index) good = false;
+      c[1].forEach(function (w) { if (t.whites.indexOf(w) < 0) good = false; });
+      if (c[2] != null && t.bonus !== c[2]) good = false;
+      if (t.drawnWhites.length !== 5 - c[1].length || t.drawnBonus !== (c[2] == null)) good = false;
+      t.drawnWhites.forEach(function (w) { if (c[1].indexOf(w) >= 0) good = false; });
+    }
+  });
+  ok(good, "fillTicket keeps locks, valid distinct tickets, correct index");
+  // all six locked: exactly the locks, nothing drawn, rng never called
+  var calls = 0;
+  var all = M.fillTicket(MM, [62, 7, 48, 19, 33], 11, function () { calls++; return 0; });
+  eq([all.whites, all.bonus, all.index, all.drawnWhites, all.drawnBonus, calls], [[7, 19, 33, 48, 62], 11, 147183154, [], false, 0], "fillTicket all locked = locks");
+  // deterministic with a stub rng
+  var zero = function () { return 0; };
+  eq(M.fillTicket(MM, [3], null, zero), { whites: [1, 2, 3, 4, 5], bonus: 1, index: M.encode(MM, [1, 2, 3, 4, 5], 1), drawnWhites: [1, 2, 4, 5], drawnBonus: true }, "fillTicket stub rng 0");
+  var last = function (n) { return n - 1; };
+  var tl = M.fillTicket(PB, [], 8, last);
+  eq([tl.whites, tl.bonus], [[65, 66, 67, 68, 69], 8], "fillTicket stub rng n-1");
+  eq(M.fillTicket(MM, [10, 20], 8, zero), M.fillTicket(MM, [20, 10], 8, zero), "fillTicket deterministic, lock order irrelevant");
+  throwsMsg(function () { M.fillTicket(MM, [1, 1], null); }, "duplicate white ball 1", "fillTicket dup lock");
+  throwsMsg(function () { M.fillTicket(MM, [71], null); }, "white ball 71 out of range 1-70", "fillTicket white range");
+  throwsMsg(function () { M.fillTicket(PB, [], 27); }, "Powerball 27 out of range 1-26", "fillTicket bonus range");
+  throwsMsg(function () { M.fillTicket(MM, [1, 2, 3, 4, 5, 6], null); }, "expected 5 white balls, got 6", "fillTicket too many locks");
+  // uniformity: Mega Ball 8 locked -> whites uniform over 1..70; df 69. Also 2 whites locked -> free over 68.
+  function chi(counts, expct) { var x = 0; counts.forEach(function (c) { x += (c - expct) * (c - expct) / expct; }); return x; }
+  var N = 60000, cw = [], cb = [], i, n;
+  for (i = 0; i < 70; i++) cw.push(0);
+  for (i = 0; i < N; i++) { var t = M.fillTicket(MM, [], 8); t.whites.forEach(function (w) { cw[w - 1]++; }); if (t.bonus !== 8) cb.push(t.bonus); }
+  var x1 = chi(cw, N * 5 / 70);
+  ok(cb.length === 0 && x1 < 69 + 5 * Math.sqrt(2 * 69), "MB 8 locked: bonus always 8, whites chi2 " + x1.toFixed(1) + " (df 69)");
+  var cf = {}, nb = [];
+  for (i = 0; i < 26; i++) nb.push(0);
+  for (i = 0; i < N; i++) {
+    var u = M.fillTicket(PB, [7, 64], null);
+    u.drawnWhites.forEach(function (w) { cf[w] = (cf[w] || 0) + 1; });
+    nb[u.bonus - 1]++;
+  }
+  var free = []; for (n = 1; n <= 69; n++) if (n !== 7 && n !== 64) free.push(cf[n] || 0);
+  var x2 = chi(free, N * 3 / 67), x3 = chi(nb, N / 26);
+  ok(!cf[7] && !cf[64] && x2 < 66 + 5 * Math.sqrt(2 * 66), "PB 2 whites locked: free whites chi2 " + x2.toFixed(1) + " (df 66)");
+  ok(x3 < 25 + 5 * Math.sqrt(50), "PB unlocked bonus chi2 " + x3.toFixed(1) + " (df 25)");
+})();
+
 section("export format (SPEC section 9)");
 (function () {
   var plays = [

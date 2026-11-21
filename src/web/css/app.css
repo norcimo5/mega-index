@@ -64,6 +64,9 @@
   --heat-scale: linear-gradient(90deg, #00a6cf, #8ee9ff, #ffffff, #ff9bd8, #e0008f);
   --chart-n-legend: #b8c5e3;
   --chart-o-legend: #0048ff;
+  /* CODEC locks: neon fill on grid cells, ring + glow on readout balls, padlock badge */
+  --lock: #e6008f; --lock-ink: #fff; --lock-ring: #ff1fae; --lock-glow: rgba(255, 31, 174, .6);
+  --lock-badge: #ff6ad0; --lock-text: var(--magenta-ink);
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", "JetBrains Mono", "Droid Sans Mono", Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace;
   --cut: 14px;
   --ball: clamp(36px, calc((100vw - 104px) / 6.2), 48px);
@@ -367,6 +370,31 @@ main {
 .grid-mb .num { border-color: var(--mb-border); }
 .grid-mb .num[aria-pressed="true"] { background: var(--gold); color: var(--mb-ink); border-color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink), 0 0 10px var(--mb-glow-2); }
 .num.deny { animation: deny .3s; }
+/* locked = tapped by the user; kept by RANDOM. Distinct from the drawn (ink) state. */
+.num-grid .num.locked {
+  position: relative; z-index: 1; clip-path: none; background: var(--lock); color: var(--lock-ink); border-color: var(--lock-ring);
+  box-shadow: 0 0 0 2px var(--lock-ring), 0 0 12px var(--lock-glow);
+}
+.lockb {
+  position: absolute; top: -6px; right: -6px; z-index: 2; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--ink); color: var(--lock-badge);
+  box-shadow: 0 0 0 1.5px #fff, 0 0 6px var(--lock-glow); pointer-events: none;
+}
+.lockb svg { width: 11px; height: 11px; display: block; }
+.num .lockb { top: -7px; right: -7px; width: 17px; height: 17px; }
+.num .lockb svg { width: 10px; height: 10px; }
+.enc-readout .ball[data-n] { cursor: pointer; touch-action: manipulation; }
+.enc-readout .ball[data-n]:focus-visible { outline: 2px solid var(--lock-ring); outline-offset: 3px; }
+.enc-readout .ball.locked, .enc-readout .ball.mb.locked {
+  box-shadow: inset 0 0 0 2.5px var(--lock), 0 0 0 3px var(--lock-ring), 0 0 16px var(--lock-glow);
+}
+.enc-readout .ball.locked .n { color: var(--lock-text); }
+.lock-hint { margin: -2px 0 8px; text-align: center; font-size: 10.5px; font-weight: 800; letter-spacing: .14em; color: var(--ink-3); }
+.lock-hint b { color: var(--ink); }
+.lock-hint.on { color: var(--lock-text); }
+.btn-random { margin-top: 12px; }
+.btn-random .dice { width: 22px; height: 22px; fill: var(--cyan); color: var(--cyan); filter: drop-shadow(0 0 4px var(--cyan)); }
+.lock-odds { margin: 6px 0 0; text-align: center; font-size: 11px; color: var(--ink-3); }
 @keyframes deny { 25% { transform: translateX(-3px); background: #ffe1e8; } 75% { transform: translateX(3px); } }
 
 .dec-row { display: flex; gap: 8px; }

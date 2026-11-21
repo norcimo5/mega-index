@@ -5,7 +5,7 @@
  * Bump APP_VERSION whenever any file in PRECACHE changes, INCLUDING the shared ../js and ../css files
  * (a change there needs both this APP_VERSION and MEGA's ../sw.js APP_VERSION bumped).
  * Only "power-index-" caches are ever deleted here, so MEGA's caches on the same origin are untouched. */
-var APP_VERSION = "v1";
+var APP_VERSION = "v2";
 self.window = self; /* draws-data.js assigns window.PB_DRAWS / window.PB_DRAWS_UPDATED */
 try { importScripts("./js/draws-data.js"); } catch (e) { /* keep working without the stamp */ }
 var DATA_STAMP = String(self.PB_DRAWS_UPDATED || "nodata") + "-" + ((self.PB_DRAWS && self.PB_DRAWS.length) || 0);

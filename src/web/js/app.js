@@ -324,7 +324,15 @@
   }
 
   /* ------------------------------------------------------------ ENCODE / DECODE */
-  var enc = { w: [], mb: null };
+  /* Model: a ticket under construction = selected whites (enc.w) + bonus (enc.mb). A number the user
+   * taps is selected AND locked; numbers drawn by RANDOM are selected but unlocked. RANDOM keeps the
+   * locked numbers, draws the rest (M.fillTicket, uniform), then clears every lock (one-shot). */
+  var enc = { w: [], mb: null, lw: {}, lmb: false };
+  var LOCK_SVG = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3.6 5.4V3.9a2.4 2.4 0 0 1 4.8 0v1.5" fill="none" stroke="currentColor" stroke-width="1.7"/><rect x="2" y="5.2" width="8" height="5.8" rx="1" fill="currentColor"/></svg>';
+  function lockBadge() { var b = h("span", "lockb", LOCK_SVG); b.setAttribute("aria-hidden", "true"); return b; }
+  function lockedWhites() { return enc.w.filter(function (n) { return enc.lw[n]; }); }
+  function lockCount() { return lockedWhites().length + (enc.lmb ? 1 : 0); }
+
   function buildGrids() {
     var gw = $("#gridW"), gb = $("#gridMB");
     for (var n = 1; n <= G.white_max; n++) gw.appendChild(numBtn(n, false));
@@ -335,42 +343,90 @@
     b.type = "button"; b.textContent = pad2(n);
     b.setAttribute("aria-pressed", "false");
     b.setAttribute("aria-label", (mb ? BN + " " : "White ball ") + n);
-    b.addEventListener("click", function () { mb ? toggleMB(n, b) : toggleW(n, b); });
+    b.addEventListener("click", function () { mb ? tapMB(n, b) : tapW(n, b); });
     return b;
   }
-  function toggleW(n, b) {
-    var i = enc.w.indexOf(n);
-    if (i >= 0) enc.w.splice(i, 1);
-    else if (enc.w.length >= G.white_count) {
-      b.classList.remove("deny"); void b.offsetWidth; b.classList.add("deny");
-      vibrate([30, 30, 30]);
-      setEncMsg("MAX 5 WHITE BALLS — DESELECT ONE FIRST", "err");
-      return;
-    } else enc.w.push(n);
+  function deny(b, msg) {
+    if (b) { b.classList.remove("deny"); void b.offsetWidth; b.classList.add("deny"); }
+    vibrate([30, 30, 30]);
+    setEncMsg(msg, "err");
+    toast(msg);
+  }
+  // grid: unselected -> locked; drawn (unlocked) -> locked; locked -> removed
+  function tapW(n, b) {
+    if (enc.lw[n]) { delete enc.lw[n]; enc.w.splice(enc.w.indexOf(n), 1); }
+    else if (enc.w.indexOf(n) >= 0) enc.lw[n] = true;
+    else {
+      if (enc.w.length >= G.white_count) {
+        var keep = lockedWhites();
+        if (keep.length >= G.white_count) { deny(b, "MAX 5 WHITES LOCKED · TAP ONE TO UNLOCK"); return; }
+        enc.w = keep; // a new pick releases the RANDOM-drawn whites, the locks stay
+      }
+      enc.w.push(n); enc.lw[n] = true;
+    }
     vibrate(8);
     renderEncode(true);
   }
-  function toggleMB(n) {
-    enc.mb = enc.mb === n ? null : n;
+  function tapMB(n, b) {
+    if (enc.mb === n) {
+      if (enc.lmb) { enc.mb = null; enc.lmb = false; } else enc.lmb = true;
+    } else if (enc.mb != null && enc.lmb) {
+      deny(b, BNU + " " + pad2(enc.mb) + " IS LOCKED · TAP IT TO UNLOCK"); return;
+    } else { enc.mb = n; enc.lmb = true; }
     vibrate(8);
     renderEncode(true);
+  }
+  // readout ball: toggle the lock, the number stays on the ticket
+  function tapSlot(n, mb) {
+    if (mb) enc.lmb = !enc.lmb;
+    else if (enc.lw[n]) delete enc.lw[n]; else enc.lw[n] = true;
+    vibrate(8);
+    renderEncode(false);
+  }
+  function randomFill() {
+    var t;
+    try { t = M.fillTicket(G, lockedWhites(), enc.lmb ? enc.mb : null); } catch (e) { toast("ERROR: " + e.message); return; }
+    enc.w = t.whites.slice(); enc.mb = t.bonus; enc.lw = {}; enc.lmb = false; // locks are one-shot
+    lastEncIdx = null;
+    renderEncode(false);
+    var items = [], k = 0;
+    $$("#encSlots .ball").forEach(function (b) {
+      var n = +b.getAttribute("data-n"), mb = b.classList.contains("mb");
+      if (mb ? t.drawnBonus : t.drawnWhites.indexOf(n) >= 0) {
+        items.push({ el: b.querySelector(".n"), final: pad2(n), at: 160 + (k++) * 85, ball: b });
+      }
+    });
+    var idxEl = $("#encIdx");
+    items.push({ el: idxEl, final: grp(t.index), at: 160 + k * 85 + 120 });
+    reveal(items);
+    vibrate(items.length > 1 ? [12, 40, 12, 40, 28] : [10, 30, 20]);
   }
   function setEncMsg(t, cls) { var m = $("#encMsg"); m.textContent = t; m.className = "enc-msg" + (cls ? " " + cls : ""); }
   var lastEncIdx = null;
   function renderEncode(animate) {
     var ws = enc.w.slice().sort(function (a, b) { return a - b; });
-    $$("#gridW .num").forEach(function (b, i) { b.setAttribute("aria-pressed", enc.w.indexOf(i + 1) >= 0 ? "true" : "false"); });
-    $$("#gridMB .num").forEach(function (b, i) { b.setAttribute("aria-pressed", enc.mb === i + 1 ? "true" : "false"); });
+    $$("#gridW .num").forEach(function (b, i) { markNum(b, enc.w.indexOf(i + 1) >= 0, !!enc.lw[i + 1]); });
+    $$("#gridMB .num").forEach(function (b, i) { markNum(b, enc.mb === i + 1, enc.mb === i + 1 && enc.lmb); });
     var slots = $("#encSlots"); slots.innerHTML = "";
-    for (var i = 0; i < 5; i++) {
-      var be = ballEl(ws[i] == null ? null : ws[i], false);
-      if (ws[i] == null) be.classList.add("empty-slot");
-      slots.appendChild(be);
+    function slot(n, mb) {
+      var be = ballEl(n == null ? null : n, mb);
+      if (n == null) { be.classList.add("empty-slot"); return be; }
+      var lk = mb ? enc.lmb : !!enc.lw[n];
+      be.setAttribute("data-n", n);
+      be.setAttribute("role", "button"); be.tabIndex = 0;
+      be.setAttribute("aria-pressed", lk ? "true" : "false");
+      be.setAttribute("aria-label", (mb ? BN + " " : "White ball ") + n + (lk ? ", locked" : "") + ". Tap to " + (lk ? "unlock" : "lock"));
+      if (lk) { be.classList.add("locked"); be.appendChild(lockBadge()); }
+      return be;
     }
+    for (var i = 0; i < 5; i++) slots.appendChild(slot(ws[i], false));
     slots.appendChild(h("span", "plus"));
-    var mbe = ballEl(enc.mb, true); if (enc.mb == null) mbe.classList.add("empty-slot");
-    slots.appendChild(mbe);
+    slots.appendChild(slot(enc.mb, true));
     $("#encCount").textContent = ws.length + "/5 · " + (enc.mb ? 1 : 0) + "/1";
+    var nl = lockCount();
+    $("#encHint").innerHTML = nl === 6 ? "ALL 6 LOCKED · <b>RANDOM</b> KEEPS THIS TICKET"
+      : nl ? nl + " LOCKED · <b>RANDOM</b> FILLS THE REST" : "TAP TO LOCK · <b>RANDOM</b> FILLS THE REST";
+    $("#encHint").classList.toggle("on", nl > 0);
     var complete = ws.length === 5 && enc.mb != null;
     $("#encCopy").disabled = !complete; $("#encToDec").disabled = !complete;
     var idxEl = $("#encIdx");
@@ -382,19 +438,28 @@
         lastEncIdx = idx;
         idxEl.textContent = grp(idx);
         if (animate) reveal([{ el: idxEl, final: grp(idx), at: 420 }]);
-        vibrate([10, 30, 20]);
+        if (animate) vibrate([10, 30, 20]);
       }
-      setEncMsg("LOCKED · " + M.fmtTicket(G, ws, enc.mb) + " → " + idx, "ok");
+      setEncMsg("ENCODED · " + M.fmtTicket(G, ws, enc.mb) + " → " + idx, "ok");
     } else {
       lastEncIdx = null;
       idxEl.textContent = "—";
       var need = [];
       if (ws.length < 5) need.push((5 - ws.length) + " MORE WHITE" + (5 - ws.length > 1 ? "S" : ""));
       if (enc.mb == null) need.push("1 " + BNU);
-      setEncMsg("NEED " + need.join(" + "), "");
+      setEncMsg("NEED " + need.join(" + ") + " · OR TAP RANDOM", "");
     }
   }
-  function setEncodeTicket(whites, bonus) { enc.w = whites.slice(); enc.mb = bonus; lastEncIdx = null; renderEncode(true); }
+  function markNum(b, sel, lk) {
+    b.setAttribute("aria-pressed", sel ? "true" : "false");
+    var had = b.querySelector(".lockb");
+    if (lk && !had) b.appendChild(lockBadge());
+    if (!lk && had) b.removeChild(had);
+    b.classList.toggle("locked", lk);
+    var base = b.getAttribute("aria-label").replace(/, (locked|drawn)$/, "");
+    b.setAttribute("aria-label", base + (lk ? ", locked" : sel ? ", drawn" : ""));
+  }
+  function setEncodeTicket(whites, bonus) { enc.w = whites.slice(); enc.mb = bonus; enc.lw = {}; enc.lmb = false; lastEncIdx = null; renderEncode(true); }
 
   function decodeTrace(index) {
     var N = Math.floor(index / G.bonus_max), b = index % G.bonus_max + 1;
@@ -782,10 +847,17 @@
       var b = e.target.closest("button"); if (!b) return;
       location.replace("#" + b.getAttribute("data-v"));
     });
-    $("#encLucky").addEventListener("click", function () {
-      var t = M.decode(G, M.randbelow(G.total)); setEncodeTicket(t.whites, t.bonus);
+    $("#encRandom").addEventListener("click", randomFill);
+    $("#encOdds").textContent = "Locking numbers doesn't change the odds: every ticket is still 1 in " + grp(G.total) + ".";
+    $("#encSlots").addEventListener("click", function (e) {
+      var b = e.target.closest(".ball[data-n]"); if (!b) return;
+      tapSlot(+b.getAttribute("data-n"), b.classList.contains("mb"));
     });
-    $("#encClear").addEventListener("click", function () { enc.w = []; enc.mb = null; lastEncIdx = null; renderEncode(false); });
+    $("#encSlots").addEventListener("keydown", function (e) {
+      var b = e.target.closest(".ball[data-n]"); if (!b || (e.key !== "Enter" && e.key !== " ")) return;
+      e.preventDefault(); tapSlot(+b.getAttribute("data-n"), b.classList.contains("mb"));
+    });
+    $("#encClear").addEventListener("click", function () { enc.w = []; enc.mb = null; enc.lw = {}; enc.lmb = false; lastEncIdx = null; renderEncode(false); });
     $("#encCopy").addEventListener("click", function () {
       if (lastEncIdx != null) copyText(M.fmtTicket(G, enc.w, enc.mb) + "  index " + lastEncIdx + "\n", "INDEX COPIED");
     });

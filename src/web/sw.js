@@ -3,7 +3,7 @@
  * from js/draws-data.js. That file is pulled in with importScripts, so when the scheduled data
  * refresh rewrites it, the browser's SW update check sees a changed import, installs this worker
  * again under a new cache name, and old caches are deleted on activate. */
-var APP_VERSION = "v4";
+var APP_VERSION = "v5";
 self.window = self; /* draws-data.js assigns window.MM_DRAWS / window.MM_DRAWS_UPDATED */
 try { importScripts("./js/draws-data.js"); } catch (e) { /* keep working without the stamp */ }
 var DATA_STAMP = String(self.MM_DRAWS_UPDATED || "nodata") + "-" + ((self.MM_DRAWS && self.MM_DRAWS.length) || 0);

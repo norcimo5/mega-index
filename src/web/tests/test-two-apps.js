@@ -166,8 +166,9 @@ async function upgrade(v3dir) {
   ok(await settle(b, "/power/sw.js"), "upgrade: first /power/ visit hands over to POWER's worker");
   await checkApp(b, base, "upgrade first visit", "power");
   await b.go(base);
-  // v4 replaces v3 (the NEW BUILD bar may legitimately show on this load); wait until v3's cache is gone
-  ok(await waitFor(async function () { var k = JSON.stringify(await b.eval("caches.keys()")); return /mega-index-v4-/.test(k) && !/mega-index-v3-/.test(k); }, 15000), "upgrade: MEGA worker updated to v4");
+  // the current build replaces v3 (the NEW BUILD bar may legitimately show on this load); wait until v3's cache is gone
+  var cur = "mega-index-" + fs.readFileSync(path.join(WEB, "sw.js"), "utf8").match(/APP_VERSION = "([^"]+)"/)[1] + "-";
+  ok(await waitFor(async function () { var k = JSON.stringify(await b.eval("caches.keys()")); return k.indexOf(cur) >= 0 && !/mega-index-v3-/.test(k); }, 15000), "upgrade: MEGA worker updated to " + cur);
   await b.go(base); await settle(b, "/sw.js");
   await checkApp(b, base, "upgrade mega", "mega");
   ok(b.errors.length === 0, "upgrade: no exceptions " + JSON.stringify(b.errors));
